@@ -1,64 +1,104 @@
+"use client";
+
 import React from 'react';
 import { Mic, MicOff } from 'lucide-react';
 import { useVoiceStore } from '../stores/voiceStore';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface ListeningIndicatorProps {
   onToggle: () => void;
-  volume?: number; // 0 to 100 roughly
+  volume?: number; 
 }
 
 export default function ListeningIndicator({ onToggle, volume = 0 }: ListeningIndicatorProps) {
   const store = useVoiceStore();
   
-  // Calculate a scale based on volume if detecting speech
-  const scale = store.isDetectingSpeech ? 1 + (Math.max(0, volume) / 100) * 0.3 : 1;
+  // Calculate dynamic scale based on volume
+  const scale = store.isDetectingSpeech ? 1 + (Math.max(0, volume) / 100) * 0.5 : 1;
+
+  // Determine state colors
+  let innerColor = 'bg-primary text-primary-foreground';
+  let glowColor = 'rgba(255,255,255,0)';
+  
+  if (store.isSpeaking) {
+    innerColor = 'bg-indigo-500 text-white';
+    glowColor = 'rgba(99, 102, 241, 0.4)';
+  } else if (store.isThinking) {
+    innerColor = 'bg-purple-500 text-white';
+    glowColor = 'rgba(168, 85, 247, 0.4)';
+  } else if (store.isDetectingSpeech) {
+    innerColor = 'bg-emerald-500 text-white';
+    glowColor = 'rgba(16, 185, 129, 0.6)';
+  } else if (store.isRecording) {
+    innerColor = 'bg-rose-500 text-white';
+    glowColor = 'rgba(244, 63, 94, 0.4)';
+  }
 
   return (
-    <footer className="flex flex-col items-center justify-center pb-8 pt-4">
-      <div className="relative">
-        {store.isRecording && (
-          <div 
-            className="absolute -inset-4 bg-primary/20 rounded-full animate-pulse-ring pointer-events-none transition-transform duration-75"
-            style={{ transform: `scale(${scale})` }}
-          />
+    <footer className="flex flex-col items-center justify-center pb-8 pt-4 w-full">
+      <div className="relative flex items-center justify-center">
+        
+        {/* Dynamic Glow Layer */}
+        <AnimatePresence>
+          {(store.isRecording || store.isSpeaking || store.isThinking) && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ 
+                opacity: 1, 
+                scale: store.isThinking ? [1, 1.2, 1] : scale,
+                rotate: store.isThinking ? [0, 180, 360] : 0 
+              }}
+              exit={{ opacity: 0, scale: 0.8 }}
+              transition={{ 
+                duration: store.isThinking ? 3 : 0.1, 
+                repeat: store.isThinking ? Infinity : 0,
+                ease: "linear"
+              }}
+              className="absolute w-32 h-32 rounded-full blur-2xl transition-colors duration-500"
+              style={{ backgroundColor: glowColor }}
+            />
+          )}
+        </AnimatePresence>
+        
+        {/* Breathing Ring for Recording */}
+        {store.isRecording && !store.isDetectingSpeech && !store.isThinking && !store.isSpeaking && (
+           <motion.div 
+             animate={{ scale: [1, 1.3, 1], opacity: [0.2, 0, 0.2] }}
+             transition={{ duration: 2, repeat: Infinity }}
+             className="absolute w-24 h-24 rounded-full border-2 border-rose-500"
+           />
         )}
         
-        {store.isDetectingSpeech && (
-           <div 
-           className="absolute -inset-2 bg-primary/40 rounded-full pointer-events-none transition-transform duration-75"
-           style={{ transform: `scale(${scale})` }}
-         />
-        )}
-        
-        <button
+        {/* Main Button */}
+        <motion.button
           onClick={onToggle}
-          className={`relative flex items-center justify-center w-20 h-20 rounded-full shadow-lg transition-all duration-300 hover:scale-105 active:scale-95 z-10 ${
-            store.isRecording 
-              ? store.isDetectingSpeech 
-                ? 'bg-red-500 text-white' // Actively hearing speech
-                : 'bg-destructive text-destructive-foreground' // Just recording but silent
-              : 'bg-primary text-primary-foreground'
-          }`}
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          animate={{ scale: store.isDetectingSpeech ? 1.05 : 1 }}
+          className={`relative flex items-center justify-center w-20 h-20 rounded-full shadow-2xl z-10 transition-colors duration-300 ${innerColor}`}
         >
-          {store.isRecording ? <MicOff size={32} /> : <Mic size={32} />}
-        </button>
+          {store.isRecording ? <MicOff size={28} /> : <Mic size={28} />}
+        </motion.button>
       </div>
       
-      <div className="mt-6 text-center text-sm text-muted-foreground h-6">
-        {store.isThinking ? (
-          <div className="flex items-center justify-center gap-2">
-            <span className="w-1.5 h-1.5 bg-muted-foreground rounded-full animate-bounce [animation-delay:-0.3s]"></span>
-            <span className="w-1.5 h-1.5 bg-muted-foreground rounded-full animate-bounce [animation-delay:-0.15s]"></span>
-            <span className="w-1.5 h-1.5 bg-muted-foreground rounded-full animate-bounce"></span>
-            <span className="ml-1">Thinking...</span>
-          </div>
-        ) : store.isRecording 
-          ? store.isDetectingSpeech 
-            ? 'Hearing you...' 
-            : 'Listening...' 
-          : store.isSpeaking 
-            ? 'Speaking...' 
-            : 'Tap to start conversation'}
+      {/* Status Text */}
+      <div className="mt-8 text-center text-sm font-medium tracking-wide text-muted-foreground h-6 uppercase">
+        <AnimatePresence mode="wait">
+          {store.isThinking ? (
+            <motion.div key="thinking" initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} className="flex items-center justify-center gap-1.5">
+              <span className="w-1.5 h-1.5 bg-purple-400 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
+              <span className="w-1.5 h-1.5 bg-purple-400 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
+              <span className="w-1.5 h-1.5 bg-purple-400 rounded-full animate-bounce"></span>
+              <span className="ml-2 bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-indigo-400">Processing...</span>
+            </motion.div>
+          ) : store.isRecording 
+            ? store.isDetectingSpeech 
+              ? <motion.span key="hearing" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-emerald-400">Listening to you...</motion.span>
+              : <motion.span key="listening" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-rose-400 animate-pulse">Waiting for speech...</motion.span>
+            : store.isSpeaking 
+              ? <motion.span key="speaking" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-indigo-400">Agent is speaking...</motion.span>
+              : <motion.span key="idle" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>Tap microphone to start</motion.span>}
+        </AnimatePresence>
       </div>
     </footer>
   );

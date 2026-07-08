@@ -81,33 +81,34 @@ export default function VoiceAgent() {
   };
 
   return (
-    <div className="flex flex-col h-full bg-background rounded-2xl border border-white/10 overflow-hidden shadow-2xl relative">
+    <div className="flex flex-col h-full glass-panel rounded-3xl overflow-hidden relative">
       {/* Header */}
-      {/* Header */}
-      <div className="flex justify-between items-center px-6 py-4 glass border-b border-white/5 shrink-0">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center">
-            <Mic size={16} className="text-primary-foreground" />
+      <div className="flex justify-between items-center px-6 py-4 glass border-b border-white/5 shrink-0 z-10">
+        <div className="flex items-center gap-4">
+          <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+            <Mic size={20} className="text-white" />
           </div>
           <div>
-            <h2 className="font-semibold text-lg">Voice Agent</h2>
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <h2 className="font-bold text-lg tracking-tight">Voice Assistant</h2>
+            <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground mt-0.5">
               {isConnected ? (
-                <><Wifi size={12} className="text-green-500" /> Connected</>
+                <><span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Connected to Gemini</>
               ) : (
-                <><WifiOff size={12} className="text-destructive" /> Disconnected</>
+                <><span className="w-2 h-2 rounded-full bg-destructive"></span> Disconnected</>
               )}
             </div>
           </div>
         </div>
-        <button className="text-muted-foreground hover:text-primary transition-colors">
-          <Settings2 size={18} />
+        <button className="text-muted-foreground hover:text-foreground transition-colors p-2 hover:bg-white/5 rounded-xl">
+          <Settings2 size={20} />
         </button>
       </div>
 
       <LiveTranscript />
 
-      <ListeningIndicator onToggle={toggleRecording} volume={volume} />
+      <div className="relative z-10 shrink-0">
+        <ListeningIndicator onToggle={toggleRecording} volume={volume} />
+      </div>
     </div>
   );
 }
