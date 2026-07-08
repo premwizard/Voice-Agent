@@ -4,7 +4,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useVoiceStore } from '../stores/voiceStore';
 import { wsService } from '../services/websocket';
 import MarkdownMessage from './MarkdownMessage';
-import { Send, Copy, RotateCcw, Trash2, Edit2, Check } from 'lucide-react';
+import { Send, Copy, RotateCcw, Trash2, Edit2, Check, MessageSquare } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export default function ChatInterface() {
