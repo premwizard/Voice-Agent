@@ -20,7 +20,7 @@ export default function LandingPage() {
           animate={{ opacity: 1, y: 0 }}
           className="font-bold text-2xl tracking-tighter bg-clip-text text-transparent bg-gradient-to-r from-white to-white/60"
         >
-          Antigravity AI
+          AI
         </motion.div>
         <motion.nav 
           initial={{ opacity: 0, y: -20 }}
@@ -127,7 +127,7 @@ export default function LandingPage() {
       
       {/* Footer */}
       <footer className="relative z-10 border-t border-white/5 py-8 text-center text-muted-foreground text-sm mt-auto">
-        <p>© 2026 Antigravity AI. All rights reserved.</p>
+        <p>© 2026 AI. All rights reserved.</p>
       </footer>
     </div>
   );

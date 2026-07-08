@@ -55,7 +55,7 @@ export default function Sidebar() {
               exit={{ opacity: 0, width: 0 }}
               className="font-bold text-lg overflow-hidden whitespace-nowrap bg-clip-text text-transparent bg-gradient-to-r from-white to-white/60"
             >
-              Antigravity AI
+              AI
             </motion.div>
           )}
         </AnimatePresence>

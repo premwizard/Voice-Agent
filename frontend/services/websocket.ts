@@ -40,9 +40,9 @@ class WebSocketService {
         }
       };
 
-      this.ws.onerror = (error) => {
+      this.ws.onerror = () => {
         if (!this.intentionalDisconnect) {
-          console.error('WebSocket Error:', error);
+          console.error('WebSocket Error: Could not connect to backend server. Make sure the backend is running on port 8000.');
         }
       };
     } catch (error) {
