@@ -100,6 +100,8 @@ class WebSocketService {
           console.error('Server Error:', message.content);
           store.setIsThinking(false);
           store.setIsSpeaking(false);
+          store.setAiPartialTranscript(''); // Clear any partial transcript just in case
+          store.setSystemNotification(message.content || "An unknown error occurred.");
           break;
       }
     } catch (e) {

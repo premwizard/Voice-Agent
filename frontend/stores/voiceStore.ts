@@ -46,6 +46,10 @@ interface VoiceState {
   setProvider: (provider: AIProvider) => void;
   conversationId: string | null;
   setConversationId: (id: string | null) => void;
+  
+  // Errors
+  systemNotification: string | null;
+  setSystemNotification: (notification: string | null) => void;
 }
 
 export const useVoiceStore = create<VoiceState>((set) => ({
@@ -90,5 +94,8 @@ export const useVoiceStore = create<VoiceState>((set) => ({
   
   conversationId: null,
   setConversationId: (id) => set({ conversationId: id }),
+  
+  systemNotification: null,
+  setSystemNotification: (notification) => set({ systemNotification: notification }),
 }));
 

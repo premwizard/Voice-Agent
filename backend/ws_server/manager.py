@@ -133,13 +133,33 @@ class ConnectionManager:
                         
                     except Exception as e:
                         import traceback
-                        logger.error(f"Provider Error: {e}")
-                        logger.error(traceback.format_exc())
+                        import uuid
+                        
+                        req_id = str(uuid.uuid4())
+                        error_type = type(e).__name__
+                        error_msg = str(e)
+                        
+                        # Detailed backend logging
+                        logger.error(f"[{req_id}] Provider Error ({error_type}): {error_msg}")
+                        logger.error(f"[{req_id}] Stack trace: {traceback.format_exc()}")
+                        
+                        # If we failed before producing any tokens, remove the user message
+                        # so that the user can retry cleanly.
+                        if full_response == "":
+                            memory.remove_last_message()
+                            
+                        # Send structured error to frontend, do NOT append to AI memory
                         await self.send_message(
                             websocket,
-                            WSMessage(type="ERROR", content=f"Error generating response: {e}").model_dump_json()
+                            WSMessage(
+                                type="ERROR", 
+                                content=error_msg,
+                                metadata={
+                                    "error_type": error_type,
+                                    "request_id": req_id
+                                }
+                            ).model_dump_json()
                         )
-                        
         except Exception as e:
             import traceback
             logger.error(f"WS Handling Error: {e}")

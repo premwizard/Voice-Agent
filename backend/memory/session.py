@@ -19,6 +19,10 @@ class SessionMemory:
     def clear(self):
         self.history = []
         
+    def remove_last_message(self):
+        if self.history:
+            self.history.pop()
+            
     def _trim_history(self):
         if len(self.history) > settings.max_history * 2:
             # keep the last N exchanges

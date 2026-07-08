@@ -157,6 +157,28 @@ export default function ChatInterface() {
             </motion.div>
           )}
         </AnimatePresence>
+        <AnimatePresence>
+          {store.systemNotification && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              className="flex justify-center w-full my-4"
+            >
+              <div className="bg-destructive/10 border border-destructive/30 text-destructive px-4 py-3 rounded-lg text-sm flex items-center gap-3 w-full max-w-md justify-between">
+                <span>{store.systemNotification}</span>
+                <button 
+                  onClick={() => store.setSystemNotification(null)}
+                  className="hover:bg-destructive/20 p-1 rounded-full transition-colors"
+                  title="Dismiss"
+                >
+                  ✕
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         <div ref={messagesEndRef} />
       </div>
 
