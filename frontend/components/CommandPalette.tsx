@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { useVoiceStore } from "../stores/voiceStore";
 import { useUIStore } from "../stores/uiStore";
 import { useDocumentStore } from "../stores/documentStore";
+import { useConversationStore } from "../stores/conversationStore";
 
 export default function CommandPalette() {
   const [open, setOpen] = useState(false);
@@ -68,11 +69,20 @@ export default function CommandPalette() {
                 <span>New Session</span>
               </Command.Item>
               <Command.Item
-                onSelect={() => runCommand(() => voiceStore.clearMessages())}
+                onSelect={() => runCommand(() => {
+                  const activeId = useConversationStore.getState().activeConversationId;
+                  if (activeId) {
+                    useConversationStore.getState().deleteConversation(activeId);
+                  }
+                  voiceStore.clearMessages();
+                  voiceStore.setAiPartialTranscript('');
+                  useConversationStore.getState().setActiveConversationId(null);
+                  router.push('/chat');
+                })}
                 className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2.5 text-sm text-foreground hover:bg-white/10 aria-selected:bg-white/10 transition-colors text-red-400 focus:text-red-300"
               >
                 <Trash2 className="h-4 w-4" />
-                <span>Clear Conversation</span>
+                <span>Delete Conversation</span>
               </Command.Item>
             </Command.Group>
 

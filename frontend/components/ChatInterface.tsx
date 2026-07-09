@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { useVoiceStore } from '../stores/voiceStore';
+import { useConversationStore } from '../stores/conversationStore';
 import { wsService } from '../services/websocket';
 import MarkdownMessage from './MarkdownMessage';
 import { Send, Copy, RotateCcw, Trash2, Edit2, Check, MessageSquare, ThumbsUp, ThumbsDown } from 'lucide-react';
@@ -73,10 +74,24 @@ export default function ChatInterface() {
       <div className="flex justify-between items-center px-6 py-4 glass border-b border-white/5 z-10 shrink-0">
         <h2 className="font-bold text-lg tracking-tight">Text Mode</h2>
         <button 
-          onClick={store.clearMessages}
+          onClick={() => {
+            const activeId = useConversationStore.getState().activeConversationId;
+            if (activeId) {
+              useConversationStore.getState().deleteConversation(activeId);
+            }
+            store.clearMessages();
+            // Start a new session internally
+            store.setAiPartialTranscript('');
+            wsService.disconnect();
+            useConversationStore.getState().setActiveConversationId(null);
+            setTimeout(() => {
+              wsService.connect(null);
+            }, 100);
+          }}
           className="text-muted-foreground hover:text-destructive transition-colors text-sm flex items-center gap-2 px-3 py-1.5 rounded-full hover:bg-destructive/10"
+          title="Delete Conversation"
         >
-          <Trash2 size={16} /> Clear
+          <Trash2 size={16} /> Delete
         </button>
       </div>
 
