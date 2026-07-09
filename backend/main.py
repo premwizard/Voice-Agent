@@ -18,6 +18,7 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+from prometheus_fastapi_instrumentator import Instrumentator
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -25,6 +26,7 @@ async def lifespan(app: FastAPI):
     await init_db()
     yield
 
+instrumentator = Instrumentator()
 
 app = FastAPI(
     title=settings.app_name,
@@ -40,6 +42,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+instrumentator.instrument(app).expose(app, endpoint="/api/system/metrics")
 
 # Register REST API router
 app.include_router(auth_router)

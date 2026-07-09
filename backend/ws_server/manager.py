@@ -29,6 +29,7 @@ from schemas.agent import AgentStatusUpdate
 from services.trace_service import trace_service
 from services.prompt_registry import prompt_registry
 from services.evaluation_service import evaluation_service
+from worker import evaluate_trace_task
 
 logger = logging.getLogger(__name__)
 
@@ -263,11 +264,9 @@ class ConnectionManager:
                         content=f"/dashboard/traces/{trace.id}"
                     ).model_dump_json(),
                 )
-                # Fire-and-forget evaluation
-                asyncio.create_task(
-                    evaluation_service.evaluate_trace(
-                        trace.id, workspace_id, content, full_response
-                    )
+                # Fire-and-forget evaluation via Celery
+                evaluate_trace_task.delay(
+                    trace.id, workspace_id, content, full_response
                 )
 
         except asyncio.CancelledError:
