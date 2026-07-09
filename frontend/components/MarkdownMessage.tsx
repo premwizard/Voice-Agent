@@ -52,8 +52,29 @@ const CodeBlock = ({ node, inline, className, children, ...props }: any) => {
 };
 
 export default function MarkdownMessage({ content }: MarkdownMessageProps) {
+  // Pre-process citations: [Source: filename.pdf, Chunk: X] -> [filename.pdf](#citation)
+  const processedContent = content.replace(
+    /\[Source: (.*?), Chunk: \d+\]/g, 
+    "[$1](#citation)"
+  );
+
   const components: Components = {
     code: CodeBlock as any,
+    a: ({ node, href, children, ...props }: any) => {
+      if (href === '#citation') {
+        return (
+          <span 
+            className="inline-flex items-center gap-1 px-2 py-0.5 ml-1 rounded-md bg-indigo-500/20 text-indigo-300 text-[11px] font-medium border border-indigo-500/30 cursor-default select-none shadow-sm align-middle"
+            title="Sourced from RAG Knowledge Base"
+            {...props}
+          >
+            <Check size={10} className="text-indigo-400" />
+            {children}
+          </span>
+        );
+      }
+      return <a href={href} className="text-indigo-400 underline hover:text-indigo-300" {...props}>{children}</a>;
+    }
   };
 
   return (
@@ -66,7 +87,6 @@ export default function MarkdownMessage({ content }: MarkdownMessageProps) {
       [&>ul]:list-disc [&>ul]:pl-6 [&>ul]:mb-4 [&>ul>li]:mb-1
       [&>ol]:list-decimal [&>ol]:pl-6 [&>ol]:mb-4 [&>ol>li]:mb-1
       [&>blockquote]:border-l-4 [&>blockquote]:border-indigo-500/50 [&>blockquote]:pl-4 [&>blockquote]:italic [&>blockquote]:text-muted-foreground
-      [&>a]:text-indigo-400 [&>a]:underline [&>a:hover]:text-indigo-300
       [&>table]:w-full [&>table]:border-collapse [&>table]:my-4 [&>table]:text-sm
       [&>table>thead>tr>th]:border [&>table>thead>tr>th]:border-white/10 [&>table>thead>tr>th]:bg-white/5 [&>table>thead>tr>th]:px-4 [&>table>thead>tr>th]:py-2 [&>table>thead>tr>th]:text-left
       [&>table>tbody>tr>td]:border [&>table>tbody>tr>td]:border-white/10 [&>table>tbody>tr>td]:px-4 [&>table>tbody>tr>td]:py-2
@@ -76,7 +96,7 @@ export default function MarkdownMessage({ content }: MarkdownMessageProps) {
         rehypePlugins={[rehypeHighlight]}
         components={components}
       >
-        {content}
+        {processedContent}
       </ReactMarkdown>
     </div>
   );

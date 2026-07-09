@@ -2,10 +2,11 @@
 
 import React, { useEffect, useState } from "react";
 import { Command } from "cmdk";
-import { Search, Settings, Monitor, Moon, Sun, MessageSquare, Plus, Mic, Trash2 } from "lucide-react";
+import { Search, Settings, Monitor, Moon, Sun, MessageSquare, Plus, Mic, Trash2, FileText } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useVoiceStore } from "../stores/voiceStore";
 import { useUIStore } from "../stores/uiStore";
+import { useDocumentStore } from "../stores/documentStore";
 
 export default function CommandPalette() {
   const [open, setOpen] = useState(false);
