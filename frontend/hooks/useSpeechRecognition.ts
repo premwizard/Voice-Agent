@@ -58,7 +58,7 @@ export function useSpeechRecognition() {
 
       recognition.onerror = (event: any) => {
         console.warn('useSpeechRecognition: Error event received:', event.error);
-        if (event.error === 'no-speech' || event.error === 'aborted' || event.error === 'network') {
+        if (event.error === 'no-speech' || event.error === 'aborted' || event.error === 'network' || event.error === 'audio-capture') {
           return;
         }
         console.error('Speech recognition error:', event.error);

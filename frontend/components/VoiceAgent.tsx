@@ -73,7 +73,10 @@ export default function VoiceAgent() {
   useEffect(() => {
     if (isRecording) {
       startMicrophone().then(() => {
-        startRecognition();
+        // Slight delay to prevent audio-capture race condition in Chrome
+        setTimeout(() => {
+          startRecognition();
+        }, 100);
       });
     } else {
       stopMicrophone();
