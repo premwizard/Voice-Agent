@@ -123,3 +123,45 @@ class SessionMetadata:
     model: str
     total_tokens_estimated: int = 0
     voice_seconds: float = 0.0
+
+@dataclass
+class Trace:
+    id: str
+    workspace_id: str
+    conversation_id: str
+    request_id: str
+    timestamp: datetime
+    total_latency_ms: float
+    total_tokens: int
+    cost: float
+    status: str  # 'success', 'error'
+    trace_data: str  # JSON string of spans and metadata
+    created_at: datetime = field(default_factory=datetime.utcnow)
+
+@dataclass
+class Prompt:
+    id: str
+    workspace_id: str
+    name: str
+    content: str
+    version: int
+    is_active: bool
+    tags: str  # comma separated
+    created_at: datetime = field(default_factory=datetime.utcnow)
+
+@dataclass
+class Evaluation:
+    id: str
+    workspace_id: str
+    trace_id: str
+    metrics: str  # JSON string of scores (e.g. {"correctness": 0.9, "hallucination": 0.1})
+    created_at: datetime = field(default_factory=datetime.utcnow)
+
+@dataclass
+class Feedback:
+    id: str
+    workspace_id: str
+    trace_id: str
+    rating: int  # 1 for positive, -1 for negative
+    comment: Optional[str] = None
+    created_at: datetime = field(default_factory=datetime.utcnow)

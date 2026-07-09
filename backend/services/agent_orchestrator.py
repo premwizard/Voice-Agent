@@ -14,6 +14,7 @@ from agents.vision_agent import vision_agent
 from agents.code_agent import code_agent
 from agents.critic_agent import critic_agent
 from agents.response_agent import response_agent
+from services.trace_service import trace_service
 
 logger = logging.getLogger(__name__)
 
@@ -32,19 +33,21 @@ class AgentOrchestrator:
         workflow_engine.register_agent("ResponseAgent", response_agent.execute)
 
     async def execute(self, instruction: str, status_callback: Callable[[AgentStatusUpdate], Awaitable[None]]) -> str:
-        workflow_id = str(uuid.uuid4())
-        workflow_engine.set_status_callback(status_callback)
-        
-        shared_context.init_workflow(workflow_id, {"initial_instruction": instruction})
-        
-        # 1. Ask Planner to generate DAG
-        await status_callback(AgentStatusUpdate(
-            agent_name="PlannerAgent", task_id="planning", status="running", detail="Analyzing intent and generating DAG"
-        ))
-        
-        dag_dict = await planner_agent.run(instruction, {}, workflow_id)
-        
-        # Parse DAG
+        with trace_service.Span(name="agent_orchestrator", metadata={"instruction": instruction}):
+            workflow_id = str(uuid.uuid4())
+            workflow_engine.set_status_callback(status_callback)
+            
+            shared_context.init_workflow(workflow_id, {"initial_instruction": instruction})
+            
+            # 1. Ask Planner to generate DAG
+            await status_callback(AgentStatusUpdate(
+                agent_name="PlannerAgent", task_id="planning", status="running", detail="Analyzing intent and generating DAG"
+            ))
+            
+            with trace_service.Span(name="planner_agent", metadata={"workflow_id": workflow_id}):
+                dag_dict = await planner_agent.run(instruction, {}, workflow_id)
+            
+            # Parse DAG
         graph = TaskGraph(id=workflow_id)
         for t_dict in dag_dict.get("tasks", []):
             task = Task(**t_dict)

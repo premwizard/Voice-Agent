@@ -172,6 +172,48 @@ CREATE TABLE IF NOT EXISTS document_chunks (
 
 CREATE INDEX IF NOT EXISTS idx_document_chunks_doc
     ON document_chunks(document_id);
+
+CREATE TABLE IF NOT EXISTS traces (
+    id              TEXT PRIMARY KEY,
+    workspace_id    TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+    request_id      TEXT NOT NULL,
+    timestamp       TEXT NOT NULL,
+    total_latency_ms REAL NOT NULL,
+    total_tokens    INTEGER NOT NULL,
+    cost            REAL NOT NULL,
+    status          TEXT NOT NULL,
+    trace_data      TEXT NOT NULL,
+    created_at      TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS prompts (
+    id              TEXT PRIMARY KEY,
+    workspace_id    TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    name            TEXT NOT NULL,
+    content         TEXT NOT NULL,
+    version         INTEGER NOT NULL,
+    is_active       INTEGER NOT NULL DEFAULT 1,
+    tags            TEXT,
+    created_at      TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS evaluations (
+    id              TEXT PRIMARY KEY,
+    workspace_id    TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    trace_id        TEXT NOT NULL REFERENCES traces(id) ON DELETE CASCADE,
+    metrics         TEXT NOT NULL,
+    created_at      TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS feedback (
+    id              TEXT PRIMARY KEY,
+    workspace_id    TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    trace_id        TEXT NOT NULL REFERENCES traces(id) ON DELETE CASCADE,
+    rating          INTEGER NOT NULL,
+    comment         TEXT,
+    created_at      TEXT NOT NULL
+);
 """
 
 

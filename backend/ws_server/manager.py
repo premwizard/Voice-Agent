@@ -26,6 +26,7 @@ from services.vision_context_builder import vision_context_builder
 from config.settings import settings
 from services.agent_orchestrator import agent_orchestrator
 from schemas.agent import AgentStatusUpdate
+from services.trace_service import trace_service
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +37,7 @@ class ConnectionManager:
         self.generation_tasks: dict[str, asyncio.Task] = {}
         # Track current mode per connection for message tagging
         self._modes: dict[str, str] = {}
+        self._workspaces: dict[WebSocket, str] = {}
 
     async def connect(
         self,
@@ -47,6 +49,7 @@ class ConnectionManager:
         await websocket.accept()
         self.active_connections.append(websocket)
         self._modes[conversation_id] = mode
+        self._workspaces[websocket] = workspace_id
 
         # Ensure conversation record exists in DB
         await memory_manager.ensure_conversation(conversation_id, workspace_id, mode=mode)
@@ -98,6 +101,7 @@ class ConnectionManager:
         if websocket in self.active_connections:
             self.active_connections.remove(websocket)
         self._modes.pop(conversation_id, None)
+        self._workspaces.pop(websocket, None)
         if conversation_id in self.generation_tasks:
             task = self.generation_tasks[conversation_id]
             if not task.done():
@@ -120,9 +124,13 @@ class ConnectionManager:
     ) -> None:
         full_response = ""
         mode = self._modes.get(conversation_id, "chat")
+        workspace_id = self._workspaces.get(websocket, "default")
         media_ids = media_ids or []
 
         try:
+            # Start trace
+            trace_service.start_trace(workspace_id=workspace_id, conversation_id=conversation_id)
+
             provider = get_provider()
             provider.initialize()
 
@@ -237,6 +245,16 @@ class ConnectionManager:
                     metadata={"total_time": total_time, "ttft": ttft},
                 ).model_dump_json(),
             )
+            
+            trace = await trace_service.end_trace(status="success")
+            if trace:
+                await self._send(
+                    websocket,
+                    WSMessage(
+                        type="TRACE_URL",
+                        content=f"/dashboard/traces/{trace.id}"
+                    ).model_dump_json(),
+                )
 
         except asyncio.CancelledError:
             logger.warning(f"[{conversation_id}] Generation cancelled (INTERRUPT)")
@@ -267,6 +285,7 @@ class ConnectionManager:
                     metadata={"error_type": error_type, "request_id": req_id},
                 ).model_dump_json(),
             )
+            await trace_service.end_trace(status="error")
 
         finally:
             if conversation_id in self.generation_tasks:
