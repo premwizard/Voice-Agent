@@ -6,7 +6,9 @@ from config.settings import settings
 class GeminiEmbeddingProvider(EmbeddingProvider):
     def __init__(self):
         # We can reuse the genai client configured similarly to the llm_service
-        self.client = genai.Client()
+        # If no key is provided, genai may fail. We handle this gracefully.
+        api_key = settings.gemini_api_key or "DUMMY_KEY_TO_PREVENT_CRASH"
+        self.client = genai.Client(api_key=api_key)
         self.model = "text-embedding-004"
         
     async def embed_query(self, text: str) -> List[float]:
