@@ -33,7 +33,7 @@ export const useDocumentStore = create<DocumentStore>((set, get) => ({
 
   fetchDocuments: async () => {
     try {
-      const res = await fetch('http://localhost:8000/documents');
+      const res = await fetch('http://127.0.0.1:8000/documents');
       const data = await res.json();
       set({ documents: data });
     } catch (error) {
@@ -55,7 +55,7 @@ export const useDocumentStore = create<DocumentStore>((set, get) => ({
         }));
       }, 200);
 
-      const res = await fetch('http://localhost:8000/documents/upload', {
+      const res = await fetch('http://127.0.0.1:8000/documents/upload', {
         method: 'POST',
         body: formData,
       });
@@ -84,7 +84,7 @@ export const useDocumentStore = create<DocumentStore>((set, get) => ({
     set({ documents: previousDocs.filter(d => d.id !== id) });
     
     try {
-      const res = await fetch(`http://localhost:8000/documents/${id}`, {
+      const res = await fetch(`http://127.0.0.1:8000/documents/${id}`, {
         method: 'DELETE',
       });
       if (!res.ok) throw new Error('Delete failed');
