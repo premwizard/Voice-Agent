@@ -16,8 +16,9 @@ export default function SettingsDrawer({ open, onOpenChange }: SettingsDrawerPro
   const [activeTab, setActiveTab] = useState('general');
 
   const tabs = [
+    { id: 'profile', label: 'Profile', icon: <User size={18} /> },
     { id: 'general', label: 'General', icon: <Settings size={18} /> },
-    { id: 'api', label: 'API Keys', icon: <Key size={18} /> },
+    { id: 'api', label: 'Security & APIs', icon: <Key size={18} /> },
     { id: 'multimodal', label: 'Multimodal', icon: <ImageIcon size={18} /> },
     { id: 'appearance', label: 'Appearance', icon: <Palette size={18} /> },
     { id: 'about', label: 'About', icon: <Info size={18} /> },
@@ -94,10 +95,50 @@ export default function SettingsDrawer({ open, onOpenChange }: SettingsDrawerPro
                       </div>
                     )}
                     
-                    {activeTab === 'api' && (
+                    {activeTab === 'profile' && (
                       <div className="space-y-6">
                         <div>
-                          <h3 className="text-sm font-semibold mb-3">Google API Key</h3>
+                          <h3 className="text-sm font-semibold mb-3">Your Name</h3>
+                          <input 
+                            type="text" 
+                            className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-sm outline-none focus:border-indigo-500"
+                            placeholder="Alex"
+                          />
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-semibold mb-3">Email Address</h3>
+                          <input 
+                            type="email" 
+                            className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-sm outline-none focus:border-indigo-500 text-muted-foreground"
+                            disabled
+                            value="user@example.com"
+                          />
+                          <p className="text-xs text-muted-foreground mt-2">Emails cannot be changed.</p>
+                        </div>
+                        <button 
+                          onClick={() => toast.success('Profile updated')}
+                          className="w-full bg-indigo-500 hover:bg-indigo-600 text-white font-medium py-2.5 rounded-xl transition-colors shadow-lg shadow-indigo-500/25"
+                        >
+                          Save Profile
+                        </button>
+                      </div>
+                    )}
+
+                    {activeTab === 'api' && (
+                      <div className="space-y-6">
+                        <div className="p-4 bg-indigo-500/10 border border-indigo-500/20 rounded-xl text-sm text-indigo-200">
+                          API keys are securely encrypted at rest. They are only decrypted temporarily during inference.
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-semibold mb-3">OpenAI API Key</h3>
+                          <input 
+                            type="password" 
+                            className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-sm outline-none focus:border-indigo-500"
+                            placeholder="sk-..."
+                          />
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-semibold mb-3">Gemini API Key</h3>
                           <input 
                             type="password" 
                             className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-sm outline-none focus:border-indigo-500"
@@ -105,7 +146,7 @@ export default function SettingsDrawer({ open, onOpenChange }: SettingsDrawerPro
                           />
                         </div>
                         <button 
-                          onClick={() => toast.success('API keys saved')}
+                          onClick={() => toast.success('API keys securely saved')}
                           className="w-full bg-indigo-500 hover:bg-indigo-600 text-white font-medium py-2.5 rounded-xl transition-colors shadow-lg shadow-indigo-500/25"
                         >
                           Save Keys

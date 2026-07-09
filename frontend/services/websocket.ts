@@ -10,6 +10,7 @@
 
 import { useVoiceStore } from '../stores/voiceStore';
 import { useConversationStore } from '../stores/conversationStore';
+import { useAuthStore } from '../stores/authStore';
 import type { ChatMessage } from '../stores/voiceStore';
 
 const WS_BASE = process.env.NEXT_PUBLIC_WS_URL ?? 'ws://127.0.0.1:8000';
@@ -40,9 +41,13 @@ class WebSocketService {
     }
 
     const mode = useVoiceStore.getState().activeMode;
+    const token = useAuthStore.getState().token;
     const params = new URLSearchParams({ mode });
     if (conversationId) {
       params.set('conversation_id', conversationId);
+    }
+    if (token) {
+      params.set('token', token);
     }
     const url = `${WS_BASE}/ws?${params.toString()}`;
 

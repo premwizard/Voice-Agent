@@ -5,14 +5,23 @@ import VoiceAgent from '@/components/VoiceAgent';
 import ChatInterface from '@/components/ChatInterface';
 import { useVoiceStore } from '@/stores/voiceStore';
 import { useConversationStore } from '@/stores/conversationStore';
+import { useAuthStore } from '@/stores/authStore';
 import { wsService } from '@/services/websocket';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useRouter } from 'next/navigation';
 
 export default function ChatPage() {
   const store = useVoiceStore();
   const convStore = useConversationStore();
+  const isAuthenticated = useAuthStore(state => state.isAuthenticated);
+  const router = useRouter();
 
   useEffect(() => {
+    if (!isAuthenticated()) {
+      router.push('/login');
+      return;
+    }
+
     // Resume the active conversation if one is persisted in localStorage,
     // otherwise the backend will generate a new conversation ID.
     const resumeId = convStore.activeConversationId;

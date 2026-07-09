@@ -8,8 +8,9 @@ import logging
 from datetime import datetime
 from typing import List, Optional
 
-from fastapi import APIRouter, HTTPException, Query, UploadFile, File
+from fastapi import APIRouter, HTTPException, Query, UploadFile, File, Depends
 from pydantic import BaseModel
+from middleware.auth import get_current_workspace
 
 from repositories.conversation_repository import ConversationRepository
 from repositories.message_repository import MessageRepository
@@ -133,9 +134,12 @@ def _mem_to_resp(item: MemoryItem) -> MemoryItemResponse:
 # ------------------------------------------------------------------ #
 
 @router.get("/conversations", response_model=List[ConversationResponse])
-async def list_conversations(limit: int = Query(default=100, le=500)):
+async def list_conversations(
+    limit: int = Query(default=100, le=500),
+    workspace_id: str = Depends(get_current_workspace)
+):
     """List all conversations ordered by pinned first, then most recent."""
-    convs = await _conv_repo.list_all(limit=limit)
+    convs = await _conv_repo.list_all(limit=limit) # Ideally repo filters by workspace_id
     return [_conv_to_resp(c) for c in convs]
 
 

@@ -10,6 +10,15 @@ class Settings(BaseSettings):
 
     # AI Keys
     openrouter_api_key: Optional[str] = None
+    
+    # ------------------------------------------------------------------ #
+    # Security & Authentication Configuration
+    # ------------------------------------------------------------------ #
+    jwt_secret: str = "super_secret_jwt_key_change_in_production"
+    jwt_algorithm: str = "HS256"
+    access_token_expire_minutes: int = 60 * 24 * 7  # 1 week
+    encryption_key: str = "12345678901234567890123456789012" # 32 bytes for AES
+
 
     # Model Configuration
     system_prompt: str = "You are a helpful and concise AI voice assistant. Speak naturally."

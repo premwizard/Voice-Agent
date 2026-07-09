@@ -1,4 +1,4 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
@@ -7,6 +7,7 @@ from config.settings import settings
 from database.db import init_db
 from api.conversations import router as conversations_router
 from api.documents import router as documents_router
+from api.auth import router as auth_router
 
 import uuid
 import logging
@@ -38,6 +39,7 @@ app.add_middleware(
 )
 
 # Register REST API router
+app.include_router(auth_router)
 app.include_router(conversations_router)
 app.include_router(documents_router)
 
@@ -52,7 +54,21 @@ def health_check():
 
 
 @app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
+async def websocket_endpoint(websocket: WebSocket, token: str = Query(None)):
+    if not token:
+        await websocket.close(code=1008, reason="Missing token")
+        return
+        
+    try:
+        import jwt
+        payload = jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
+        user_id = payload.get("sub")
+        if not user_id:
+            raise ValueError("Invalid token payload")
+    except Exception as e:
+        await websocket.close(code=1008, reason="Invalid token")
+        return
+
     # Accept an optional conversation_id query param for session resumption.
     # If not provided, generate a new unique ID (preserves existing behavior).
     conversation_id = websocket.query_params.get("conversation_id") or str(uuid.uuid4())

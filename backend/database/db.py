@@ -16,9 +16,50 @@ _DB_PATH = settings.database_url.replace("sqlite:///", "")
 CREATE_TABLES_SQL = """
 PRAGMA journal_mode=WAL;
 PRAGMA foreign_keys=ON;
+CREATE TABLE IF NOT EXISTS users (
+    id              TEXT PRIMARY KEY,
+    email           TEXT UNIQUE NOT NULL,
+    password_hash   TEXT NOT NULL,
+    role            TEXT NOT NULL DEFAULT 'user',
+    name            TEXT,
+    created_at      TEXT NOT NULL,
+    updated_at      TEXT NOT NULL,
+    profile_data    TEXT
+);
+
+CREATE TABLE IF NOT EXISTS workspaces (
+    id          TEXT PRIMARY KEY,
+    user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name        TEXT NOT NULL,
+    created_at  TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS api_keys (
+    id              TEXT PRIMARY KEY,
+    workspace_id    TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    provider        TEXT NOT NULL,
+    encrypted_key   TEXT NOT NULL,
+    created_at      TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS activity_logs (
+    id              TEXT PRIMARY KEY,
+    workspace_id    TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    action          TEXT NOT NULL,
+    metadata        TEXT,
+    created_at      TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS sessions (
+    id          TEXT PRIMARY KEY,
+    user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token       TEXT NOT NULL,
+    expires_at  TEXT NOT NULL
+);
 
 CREATE TABLE IF NOT EXISTS conversations (
     id          TEXT PRIMARY KEY,
+    workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
     title       TEXT NOT NULL DEFAULT 'New Conversation',
     created_at  TEXT NOT NULL,
     updated_at  TEXT NOT NULL,
@@ -77,6 +118,7 @@ CREATE TABLE IF NOT EXISTS session_metadata (
 
 CREATE TABLE IF NOT EXISTS media_items (
     id              TEXT PRIMARY KEY,
+    workspace_id    TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
     conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
     file_name       TEXT NOT NULL,
     file_path       TEXT NOT NULL,
@@ -90,6 +132,7 @@ CREATE TABLE IF NOT EXISTS media_items (
 
 CREATE TABLE IF NOT EXISTS documents (
     id                  TEXT PRIMARY KEY,
+    workspace_id        TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
     filename            TEXT NOT NULL,
     file_type           TEXT NOT NULL,
     file_size           INTEGER NOT NULL,

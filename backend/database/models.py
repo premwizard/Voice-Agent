@@ -4,8 +4,43 @@ from datetime import datetime
 
 
 @dataclass
+class User:
+    id: str
+    email: str
+    password_hash: str
+    role: str = "user"
+    name: Optional[str] = None
+    created_at: datetime = field(default_factory=datetime.utcnow)
+    updated_at: datetime = field(default_factory=datetime.utcnow)
+    profile_data: Optional[dict] = None
+
+@dataclass
+class Workspace:
+    id: str
+    user_id: str
+    name: str
+    created_at: datetime = field(default_factory=datetime.utcnow)
+
+@dataclass
+class APIKey:
+    id: str
+    workspace_id: str
+    provider: str
+    encrypted_key: str
+    created_at: datetime = field(default_factory=datetime.utcnow)
+
+@dataclass
+class ActivityLog:
+    id: str
+    workspace_id: str
+    action: str
+    metadata: Optional[dict] = None
+    created_at: datetime = field(default_factory=datetime.utcnow)
+
+@dataclass
 class Conversation:
     id: str
+    workspace_id: str
     title: str
     created_at: datetime
     updated_at: datetime
@@ -49,6 +84,7 @@ class MemoryItem:
 @dataclass
 class MediaItem:
     id: str
+    workspace_id: str
     conversation_id: str
     file_name: str
     file_path: str
