@@ -11,6 +11,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         { name: 'Analytics', href: '/dashboard/analytics', icon: LayoutDashboard },
         { name: 'Prompts', href: '/dashboard/prompts', icon: FileText },
         { name: 'Traces', href: '/dashboard/traces', icon: Activity },
+        { name: 'Operations', href: '/dashboard/operations', icon: Settings },
     ];
 
     return (
