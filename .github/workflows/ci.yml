@@ -1,0 +1,72 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  test-backend:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    - name: Install dependencies
+      run: |
+        cd backend
+        python -m pip install --upgrade pip
+        pip install flake8 pytest
+        pip install -r requirements.txt
+    - name: Lint with flake8
+      run: |
+        cd backend
+        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+    # - name: Test with pytest (uncomment when tests are added)
+    #   run: |
+    #     cd backend
+    #     pytest
+
+  test-frontend:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Use Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18.x'
+    - name: Install dependencies
+      run: |
+        cd frontend
+        npm ci
+    - name: Run linter
+      run: |
+        cd frontend
+        npm run lint
+    - name: Build
+      run: |
+        cd frontend
+        npm run build
+
+  build-and-push-docker:
+    needs: [test-backend, test-frontend]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+    - uses: actions/checkout@v3
+    - name: Log in to Docker Hub
+      uses: docker/login-action@v2
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+    - name: Build and push Backend
+      run: |
+        docker build -t your-registry/ai-platform-backend:latest ./backend
+        docker push your-registry/ai-platform-backend:latest
+    - name: Build and push Frontend
+      run: |
+        docker build -t your-registry/ai-platform-frontend:latest ./frontend
+        docker push your-registry/ai-platform-frontend:latest
