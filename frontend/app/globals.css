@@ -8,18 +8,31 @@
 
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
 
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
 
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
 
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
   
   --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
 
   --radius-xl: calc(var(--radius) + 4px);
   --radius-lg: var(--radius);
@@ -30,43 +43,69 @@
 @layer base {
   :root {
     --background: #ffffff;
-    --foreground: #111827;
-    --surface: #f3f4f6;
-    --surface-hover: #e5e7eb;
+    --foreground: #09090b;
+    --surface: #f4f4f5;
+    --surface-hover: #e4e4e7;
     --card: #ffffff;
-    --card-foreground: #111827;
-    --primary: #0f172a;
-    --primary-foreground: #f8fafc;
-    --muted: #f3f4f6;
-    --muted-foreground: #6b7280;
-    --border: #e5e7eb;
-    --input: #e5e7eb;
-    --ring: #0f172a;
+    --card-foreground: #09090b;
+    --popover: #ffffff;
+    --popover-foreground: #09090b;
+    --primary: #18181b;
+    --primary-foreground: #fafafa;
+    --secondary: #f4f4f5;
+    --secondary-foreground: #18181b;
+    --muted: #f4f4f5;
+    --muted-foreground: #71717a;
+    --accent: #f4f4f5;
+    --accent-foreground: #18181b;
+    --border: #e4e4e7;
+    --input: #e4e4e7;
+    --ring: #18181b;
     --destructive: #ef4444;
-    --radius: 1rem;
+    --destructive-foreground: #fafafa;
+    --success: #10b981;
+    --success-foreground: #fafafa;
+    --warning: #f59e0b;
+    --warning-foreground: #fafafa;
+    --info: #3b82f6;
+    --info-foreground: #fafafa;
+    --radius: 0.75rem;
   }
 
   .dark {
     --background: #09090b;
-    --foreground: #f8fafc;
+    --foreground: #fafafa;
     --surface: #18181b;
     --surface-hover: #27272a;
     --card: #09090b;
-    --card-foreground: #f8fafc;
-    --primary: #f8fafc;
-    --primary-foreground: #09090b;
-    --muted: #18181b;
+    --card-foreground: #fafafa;
+    --popover: #09090b;
+    --popover-foreground: #fafafa;
+    --primary: #fafafa;
+    --primary-foreground: #18181b;
+    --secondary: #27272a;
+    --secondary-foreground: #fafafa;
+    --muted: #27272a;
     --muted-foreground: #a1a1aa;
+    --accent: #27272a;
+    --accent-foreground: #fafafa;
     --border: #27272a;
     --input: #27272a;
-    --ring: #f8fafc;
-    --destructive: #ef4444;
+    --ring: #d4d4d8;
+    --destructive: #7f1d1d;
+    --destructive-foreground: #fafafa;
+    --success: #065f46;
+    --success-foreground: #fafafa;
+    --warning: #78350f;
+    --warning-foreground: #fafafa;
+    --info: #1e3a8a;
+    --info-foreground: #fafafa;
   }
 }
 
 @layer base {
   * {
-    @apply border-border;
+    @apply border-border outline-ring;
   }
   body {
     @apply bg-background text-foreground antialiased selection:bg-primary/30 selection:text-primary;
@@ -86,12 +125,15 @@
   @apply bg-border rounded-full hover:bg-muted-foreground/50 transition-colors;
 }
 
-/* Glassmorphism */
+/* Glassmorphism & Layout Utilities */
 .glass {
-  @apply bg-surface/50 backdrop-blur-2xl border border-white/10 shadow-xl;
+  @apply bg-surface/50 backdrop-blur-2xl border border-border shadow-xl;
 }
 .glass-panel {
-  @apply bg-background/60 backdrop-blur-3xl border border-white/5 shadow-2xl;
+  @apply bg-background/60 backdrop-blur-3xl border border-border shadow-2xl;
+}
+.premium-card {
+  @apply bg-card text-card-foreground border border-border rounded-lg shadow-sm transition-all hover:shadow-md;
 }
 
 /* Animations */
@@ -122,3 +164,4 @@
 .animate-float {
   animation: float 6s ease-in-out infinite;
 }
+

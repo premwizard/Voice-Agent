@@ -10,6 +10,33 @@ interface ListeningIndicatorProps {
   volume?: number; 
 }
 
+const AudioWaveform = ({ isSpeaking, isDetectingSpeech, volume }: { isSpeaking: boolean, isDetectingSpeech: boolean, volume: number }) => {
+  const bars = 5;
+  const baseScale = isDetectingSpeech ? 1 + (Math.max(0, volume) / 100) : 1.2;
+  return (
+    <div className="flex items-center justify-center gap-1.5 h-12">
+      {Array.from({ length: bars }).map((_, i) => (
+        <motion.div
+          key={i}
+          className={`w-1.5 rounded-full ${isSpeaking ? 'bg-indigo-400' : 'bg-emerald-400'}`}
+          animate={{
+            height: isSpeaking 
+              ? [12, Math.random() * 24 + 12, 12] 
+              : isDetectingSpeech 
+                ? 12 * baseScale * (Math.random() * 0.5 + 0.5) 
+                : 4
+          }}
+          transition={{
+            duration: isSpeaking ? 0.3 + (Math.random() * 0.2) : 0.1,
+            repeat: isSpeaking ? Infinity : 0,
+            ease: "easeInOut"
+          }}
+        />
+      ))}
+    </div>
+  );
+};
+
 export default function ListeningIndicator({ onToggle, volume = 0 }: ListeningIndicatorProps) {
   const store = useVoiceStore();
   const status = store.status;
@@ -17,10 +44,8 @@ export default function ListeningIndicator({ onToggle, volume = 0 }: ListeningIn
   const isSpeaking = status === 'speaking' || status === 'streaming_response';
   const isDetectingSpeech = status === 'speech_detected' || status === 'transcribing';
 
-  // Calculate dynamic scale based on volume
   const scale = isDetectingSpeech ? 1 + (Math.max(0, volume) / 100) * 0.5 : 1;
 
-  // Determine state colors
   let innerColor = 'bg-primary text-primary-foreground';
   let glowColor = 'rgba(255,255,255,0)';
   
@@ -40,9 +65,21 @@ export default function ListeningIndicator({ onToggle, volume = 0 }: ListeningIn
 
   return (
     <footer className="flex flex-col items-center justify-center pb-8 pt-4 w-full">
+      <div className="h-16 mb-4 flex items-center justify-center">
+         <AnimatePresence mode="wait">
+            {(isSpeaking || isDetectingSpeech) && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+              >
+                <AudioWaveform isSpeaking={isSpeaking} isDetectingSpeech={isDetectingSpeech} volume={volume} />
+              </motion.div>
+            )}
+         </AnimatePresence>
+      </div>
+
       <div className="relative flex items-center justify-center">
-        
-        {/* Dynamic Glow Layer */}
         <AnimatePresence>
           {(store.isRecording || isSpeaking || isThinking) && (
             <motion.div
@@ -64,7 +101,6 @@ export default function ListeningIndicator({ onToggle, volume = 0 }: ListeningIn
           )}
         </AnimatePresence>
         
-        {/* Breathing Ring for Recording */}
         {store.isRecording && !isDetectingSpeech && !isThinking && !isSpeaking && (
            <motion.div 
              animate={{ scale: [1, 1.3, 1], opacity: [0.2, 0, 0.2] }}
@@ -73,7 +109,6 @@ export default function ListeningIndicator({ onToggle, volume = 0 }: ListeningIn
            />
         )}
         
-        {/* Main Button */}
         <motion.button
           onClick={onToggle}
           whileHover={{ scale: 1.05 }}
@@ -85,7 +120,6 @@ export default function ListeningIndicator({ onToggle, volume = 0 }: ListeningIn
         </motion.button>
       </div>
       
-      {/* Status Text */}
       <div className="mt-8 text-center text-sm font-medium tracking-wide text-muted-foreground h-6 uppercase">
         <AnimatePresence mode="wait">
           {isThinking ? (
