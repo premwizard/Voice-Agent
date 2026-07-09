@@ -39,6 +39,16 @@ class Settings(BaseSettings):
     auto_rag: bool = True
 
     # ------------------------------------------------------------------ #
+    # MCP Configuration
+    # ------------------------------------------------------------------ #
+    enable_mcp: bool = True
+    mcp_default_timeout: int = 30
+    mcp_max_connections: int = 10
+    mcp_retry_count: int = 3
+    mcp_heartbeat_interval: int = 30
+    allow_remote_servers: bool = True
+
+    # ------------------------------------------------------------------ #
     # Memory System Configuration (all configurable via .env)
     # ------------------------------------------------------------------ #
 

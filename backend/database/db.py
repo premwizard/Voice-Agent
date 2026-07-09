@@ -57,6 +57,21 @@ CREATE TABLE IF NOT EXISTS sessions (
     expires_at  TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS mcp_servers (
+    id              TEXT PRIMARY KEY,
+    workspace_id    TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    name            TEXT NOT NULL,
+    description     TEXT,
+    transport       TEXT NOT NULL,
+    command         TEXT,
+    args            TEXT,
+    url             TEXT,
+    env_vars        TEXT,
+    status          TEXT NOT NULL DEFAULT 'disconnected',
+    created_at      TEXT NOT NULL,
+    updated_at      TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS conversations (
     id          TEXT PRIMARY KEY,
     workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,

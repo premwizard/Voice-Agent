@@ -38,6 +38,21 @@ class ActivityLog:
     created_at: datetime = field(default_factory=datetime.utcnow)
 
 @dataclass
+class MCPServer:
+    id: str
+    workspace_id: str
+    name: str
+    description: str
+    transport: str  # 'stdio' | 'sse'
+    command: Optional[str] = None
+    args: Optional[str] = None      # JSON array string
+    url: Optional[str] = None
+    env_vars: Optional[str] = None  # JSON dict string
+    status: str = "disconnected"
+    created_at: datetime = field(default_factory=datetime.utcnow)
+    updated_at: datetime = field(default_factory=datetime.utcnow)
+
+@dataclass
 class Conversation:
     id: str
     workspace_id: str
