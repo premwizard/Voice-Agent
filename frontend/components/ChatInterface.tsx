@@ -13,6 +13,7 @@ import { FileUploadZone } from './ui/FileUploadZone';
 import { MediaGallery } from './MediaGallery';
 import { VisionStatus } from './VisionStatus';
 import { ImagePreview } from './ImagePreview';
+import AgentMonitor from './agent/AgentMonitor';
 
 export default function ChatInterface() {
   const store = useVoiceStore();
@@ -327,6 +328,7 @@ export default function ChatInterface() {
       {previewMediaId && (
         <ImagePreview url="" onClose={() => setPreviewMediaId(null)} />
       )}
+      <AgentMonitor />
     </div>
   );
 }

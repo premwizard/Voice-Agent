@@ -49,6 +49,16 @@ class Settings(BaseSettings):
     allow_remote_servers: bool = True
 
     # ------------------------------------------------------------------ #
+    # Multi-Agent Configuration
+    # ------------------------------------------------------------------ #
+    enable_multi_agent: bool = True
+    max_parallel_agents: int = 5
+    max_workflow_depth: int = 10
+    agent_timeout: int = 60
+    enable_human_approval: bool = True
+    enable_agent_monitor: bool = True
+
+    # ------------------------------------------------------------------ #
     # Memory System Configuration (all configurable via .env)
     # ------------------------------------------------------------------ #
 

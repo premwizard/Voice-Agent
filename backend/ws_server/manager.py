@@ -24,6 +24,8 @@ from services.memory_manager import memory_manager
 from services.input_router import input_router
 from services.vision_context_builder import vision_context_builder
 from config.settings import settings
+from services.agent_orchestrator import agent_orchestrator
+from schemas.agent import AgentStatusUpdate
 
 logger = logging.getLogger(__name__)
 
@@ -161,51 +163,51 @@ class ConnectionManager:
 
             start_time = time.time()
             first_token_time = None
-            current_sentence = ""
             ttft = 0.0
-
-            # Stream AI response
-            async for chunk in provider.stream(
-                prompt=content,
-                system_prompt=enriched_system,
-                history=history,
-            ):
-                if first_token_time is None:
-                    first_token_time = time.time()
-                    ttft = first_token_time - start_time
-                    logger.info(f"[{conversation_id}] TTFT: {ttft:.3f}s")
-
-                full_response += chunk
-                current_sentence += chunk
-
-                # Stream raw chunk for text UI
-                await self._send(
-                    websocket,
-                    WSMessage(type="AI_STREAM", content=chunk).model_dump_json(),
-                )
-
-                # Sentence boundary detection for TTS
-                if re.search(r"[.!?\n]\s*$", current_sentence) or chunk.endswith("\n"):
-                    if current_sentence.strip():
-                        await self._send(
-                            websocket,
-                            WSMessage(
-                                type="AI_SENTENCE",
-                                content=current_sentence.strip(),
-                                metadata={"ttft": ttft},
-                            ).model_dump_json(),
-                        )
-                        current_sentence = ""
-
-            # Flush any remaining sentence
-            if current_sentence.strip():
+            
+            async def status_callback(update: AgentStatusUpdate):
                 await self._send(
                     websocket,
                     WSMessage(
-                        type="AI_SENTENCE",
-                        content=current_sentence.strip(),
-                    ).model_dump_json(),
+                        type="AGENT_STATUS",
+                        content=update.status,
+                        metadata={
+                            "agent_name": update.agent_name,
+                            "task_id": update.task_id,
+                            "detail": update.detail
+                        }
+                    ).model_dump_json()
                 )
+
+            # Route to Multi-Agent Orchestrator
+            if settings.enable_multi_agent:
+                full_response = await agent_orchestrator.execute(content, status_callback)
+            else:
+                full_response = "Multi-agent system is disabled."
+
+            # For now, since orchestrator doesn't natively stream final output token-by-token
+            # we send the entire response as a single AI_STREAM chunk and then AI_FINAL.
+            # In a real app, ResponseAgent would stream.
+            
+            if first_token_time is None:
+                first_token_time = time.time()
+                ttft = first_token_time - start_time
+                logger.info(f"[{conversation_id}] TTFT: {ttft:.3f}s")
+                
+            await self._send(
+                websocket,
+                WSMessage(type="AI_STREAM", content=full_response).model_dump_json(),
+            )
+            
+            # Flush sentence for TTS
+            await self._send(
+                websocket,
+                WSMessage(
+                    type="AI_SENTENCE",
+                    content=full_response,
+                    metadata={"ttft": ttft},
+                ).model_dump_json(),
+            )
 
             total_time = time.time() - start_time
             logger.info(f"[{conversation_id}] Total response time: {total_time:.3f}s")

@@ -11,6 +11,7 @@
 import { useVoiceStore } from '../stores/voiceStore';
 import { useConversationStore } from '../stores/conversationStore';
 import { useAuthStore } from '../stores/authStore';
+import { useAgentStore } from '../stores/agentStore';
 import type { ChatMessage } from '../stores/voiceStore';
 
 const WS_BASE = process.env.NEXT_PUBLIC_WS_URL ?? 'ws://127.0.0.1:8000';
@@ -147,6 +148,17 @@ class WebSocketService {
           if (message.metadata?.rtt) {
             latencyStore.updateMetrics({ websocketLatency: message.metadata.rtt });
           }
+          break;
+        }
+
+        case 'AGENT_STATUS': {
+          const agentStore = useAgentStore.getState();
+          agentStore.addStatus({
+            agent_name: message.metadata?.agent_name ?? 'UnknownAgent',
+            task_id: message.metadata?.task_id ?? 'unknown_task',
+            status: message.content ?? 'running',
+            detail: message.metadata?.detail
+          });
           break;
         }
 
