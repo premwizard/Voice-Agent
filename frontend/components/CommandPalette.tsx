@@ -61,6 +61,9 @@ export default function CommandPalette() {
               <Command.Item
                 onSelect={() => runCommand(() => {
                   voiceStore.clearMessages();
+                  voiceStore.setAiPartialTranscript('');
+                  voiceStore.setConversationId(null);
+                  useConversationStore.getState().setActiveConversationId(null);
                   router.push('/chat');
                 })}
                 className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2.5 text-sm text-foreground hover:bg-white/10 aria-selected:bg-white/10 transition-colors"
@@ -76,6 +79,7 @@ export default function CommandPalette() {
                   }
                   voiceStore.clearMessages();
                   voiceStore.setAiPartialTranscript('');
+                  voiceStore.setConversationId(null);
                   useConversationStore.getState().setActiveConversationId(null);
                   router.push('/chat');
                 })}

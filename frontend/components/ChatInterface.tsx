@@ -64,9 +64,9 @@ export default function ChatInterface() {
   const saveEdit = (id: string) => {
     store.updateMessage(id, editContent);
     setEditingId(null);
-    // Optionally trigger a new response here if it's the last message
-    // store.setIsThinking(true);
-    // wsService.sendMessage('USER_FINAL', editContent);
+    // Trigger a new response
+    store.setStatus('thinking');
+    wsService.sendMessage('USER_FINAL', editContent);
   };
 
   return (
@@ -82,6 +82,7 @@ export default function ChatInterface() {
             store.clearMessages();
             // Start a new session internally
             store.setAiPartialTranscript('');
+            store.setConversationId(null);
             wsService.disconnect();
             useConversationStore.getState().setActiveConversationId(null);
             setTimeout(() => {

@@ -205,6 +205,7 @@ export default function Sidebar() {
   const handleNewSession = () => {
     voiceStore.clearMessages();
     voiceStore.setAiPartialTranscript('');
+    voiceStore.setConversationId(null);
     // Disconnect old session; new conversation_id will be assigned on reconnect
     wsService.disconnect();
     convStore.setActiveConversationId(null);
