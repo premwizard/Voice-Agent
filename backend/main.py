@@ -6,6 +6,7 @@ from ws_server.manager import manager
 from config.settings import settings
 from database.db import init_db
 from api.conversations import router as conversations_router
+from api.documents import router as documents_router
 
 import uuid
 import logging
@@ -38,7 +39,7 @@ app.add_middleware(
 
 # Register REST API router
 app.include_router(conversations_router)
-
+app.include_router(documents_router)
 
 @app.get("/")
 def read_root():

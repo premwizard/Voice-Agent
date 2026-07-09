@@ -116,6 +116,11 @@ class MemoryManager:
         )
         latest_summary = await _sum_repo.get_latest(conversation_id)
         memory_items = await _mem_repo.get_all()
+        
+        # Build RAG Context
+        from services.rag_context_builder import RAGContextBuilder
+        rag_builder = RAGContextBuilder()
+        rag_context = await rag_builder.build_context(current_user_message)
 
         enriched_system, history = context_builder.build(
             system_prompt=system_prompt,
@@ -123,6 +128,7 @@ class MemoryManager:
             current_user_message=current_user_message,
             summary=latest_summary,
             memory_items=memory_items,
+            rag_context=rag_context,
         )
         return enriched_system, history
 

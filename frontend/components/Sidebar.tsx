@@ -25,6 +25,8 @@ import { useRouter } from 'next/navigation';
 import type { Conversation } from '../types/conversation';
 import { useUIStore } from '../stores/uiStore';
 import { ContextMenu, ContextMenuTrigger, ContextMenuContent, ContextMenuItem, ContextMenuSeparator } from './ui/ContextMenu';
+import { useDocumentStore } from '../stores/documentStore';
+import { FileText } from 'lucide-react';
 
 // ------------------------------------------------------------------ //
 // Helpers
@@ -243,32 +245,43 @@ export default function Sidebar() {
     convStore.togglePin(id);
   };
 
-  const navItems = [
-    {
-      id: 'voice',
-      label: 'Voice Agent',
-      icon: <Mic size={20} />,
-      onClick: () => {
-        voiceStore.setActiveMode('voice');
-        router.push('/chat');
-        setIsMobileOpen(false);
+    const navItems = [
+      {
+        id: 'voice',
+        label: 'Voice Agent',
+        icon: <Mic size={20} />,
+        onClick: () => {
+          voiceStore.setActiveMode('voice');
+          router.push('/chat');
+          setIsMobileOpen(false);
+        },
+        active: voiceStore.activeMode === 'voice',
       },
-      active: voiceStore.activeMode === 'voice',
-    },
-    {
-      id: 'chat',
-      label: 'Text Chat',
-      icon: <MessageSquare size={20} />,
-      onClick: () => {
-        voiceStore.setActiveMode('chat');
-        router.push('/chat');
-        setIsMobileOpen(false);
+      {
+        id: 'chat',
+        label: 'Text Chat',
+        icon: <MessageSquare size={20} />,
+        onClick: () => {
+          voiceStore.setActiveMode('chat');
+          router.push('/chat');
+          setIsMobileOpen(false);
+        },
+        active: voiceStore.activeMode === 'chat',
       },
-      active: voiceStore.activeMode === 'chat',
-    },
-  ];
+      {
+        id: 'knowledge',
+        label: 'Knowledge Base',
+        icon: <FileText size={20} />,
+        onClick: () => {
+          // Open Document Library
+          useDocumentStore.getState().setLibraryOpen(true);
+          setIsMobileOpen(false);
+        },
+        active: false,
+      },
+    ];
 
-  const pinnedConvs = displayedConversations.filter((c) => c.is_pinned);
+    const pinnedConvs = displayedConversations.filter((c) => c.is_pinned);
   const recentConvs = displayedConversations.filter((c) => !c.is_pinned);
 
   const sidebarContent = (
