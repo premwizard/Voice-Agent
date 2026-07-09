@@ -289,6 +289,26 @@ class ConnectionManager:
                     )
                     self.generation_tasks[conversation_id] = task
 
+            elif msg.type == "USER_EDIT":
+                if msg.content and msg.metadata and "message_id" in msg.metadata:
+                    if msg.metadata and "mode" in msg.metadata:
+                        self._modes[conversation_id] = msg.metadata["mode"]
+
+                    if conversation_id in self.generation_tasks:
+                        existing = self.generation_tasks[conversation_id]
+                        if not existing.done():
+                            existing.cancel()
+
+                    message_id = msg.metadata["message_id"]
+                    # Update message and truncate newer ones
+                    await memory_manager.edit_message_and_truncate(conversation_id, message_id, msg.content)
+                    
+                    # Generate new response
+                    task = asyncio.create_task(
+                        self._generate_response(websocket, conversation_id, msg.content)
+                    )
+                    self.generation_tasks[conversation_id] = task
+
             elif msg.type == "INTERRUPT":
                 if conversation_id in self.generation_tasks:
                     task = self.generation_tasks[conversation_id]

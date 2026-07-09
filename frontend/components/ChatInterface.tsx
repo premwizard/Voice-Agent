@@ -62,11 +62,18 @@ export default function ChatInterface() {
   };
 
   const saveEdit = (id: string) => {
+    // Remove subsequent messages locally
+    const messageIndex = store.messages.findIndex(m => m.id === id);
+    if (messageIndex !== -1) {
+      const messagesToDelete = store.messages.slice(messageIndex + 1);
+      messagesToDelete.forEach(m => store.deleteMessage(m.id));
+    }
+
     store.updateMessage(id, editContent);
     setEditingId(null);
     // Trigger a new response
     store.setStatus('thinking');
-    wsService.sendMessage('USER_FINAL', editContent);
+    wsService.sendMessage('USER_EDIT', editContent, { message_id: id });
   };
 
   return (

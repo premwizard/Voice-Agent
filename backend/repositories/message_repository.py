@@ -170,3 +170,35 @@ class MessageRepository:
             )
             await conn.commit()
         return cursor.rowcount > 0
+
+    async def truncate_after(self, conversation_id: str, message_id: str) -> int:
+        """Delete all messages that occur strictly after the given message_id in time."""
+        async with db_connection() as conn:
+            # Get the timestamp of the target message
+            cursor = await conn.execute(
+                "SELECT timestamp FROM messages WHERE id = ? AND conversation_id = ?",
+                (message_id, conversation_id)
+            )
+            row = await cursor.fetchone()
+            if not row:
+                return 0
+                
+            target_time = row["timestamp"]
+            
+            # Delete anything strictly newer
+            del_cursor = await conn.execute(
+                "DELETE FROM messages WHERE conversation_id = ? AND timestamp > ?",
+                (conversation_id, target_time)
+            )
+            await conn.commit()
+            return del_cursor.rowcount
+
+    async def update_content(self, message_id: str, new_content: str) -> bool:
+        """Update the content of an existing message."""
+        async with db_connection() as conn:
+            cursor = await conn.execute(
+                "UPDATE messages SET content = ? WHERE id = ?",
+                (new_content, message_id)
+            )
+            await conn.commit()
+            return cursor.rowcount > 0

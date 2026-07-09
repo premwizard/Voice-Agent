@@ -18,6 +18,7 @@ import logging
 from typing import List, Optional, Dict, Any, Tuple
 
 from database.models import Message, Summary, MemoryItem
+from database.db import db_connection
 from repositories.conversation_repository import ConversationRepository
 from repositories.message_repository import MessageRepository
 from repositories.summary_repository import SummaryRepository
@@ -96,6 +97,23 @@ class MemoryManager:
         removed = await _msg_repo.remove_last(conversation_id)
         if removed:
             logger.debug(f"[{conversation_id}] Rolled back last message")
+
+    async def edit_message_and_truncate(
+        self, conversation_id: str, message_id: str, new_content: str
+    ) -> None:
+        """Update an existing message and delete any messages that came after it."""
+        await _msg_repo.update_content(message_id, new_content)
+        deleted_count = await _msg_repo.truncate_after(conversation_id, message_id)
+        # Recalculate message count if we deleted rows
+        if deleted_count > 0:
+            count = await _msg_repo.count(conversation_id)
+            async with db_connection() as conn:
+                await conn.execute(
+                    "UPDATE conversations SET message_count = ? WHERE id = ?",
+                    (count, conversation_id)
+                )
+                await conn.commit()
+            logger.debug(f"[{conversation_id}] Edited message {message_id} and truncated {deleted_count} subsequent messages")
 
     # ------------------------------------------------------------------ #
     # Context assembly
