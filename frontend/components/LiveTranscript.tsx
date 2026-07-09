@@ -8,7 +8,7 @@ export default function LiveTranscript() {
 
   return (
     <main className="flex-1 overflow-y-auto mb-8 space-y-6 px-6 pt-6 custom-scrollbar relative z-10">
-      {store.messages.length === 0 && !store.userPartialTranscript && !store.aiPartialTranscript && !store.isThinking && (
+      {store.messages.length === 0 && !store.userPartialTranscript && !store.aiPartialTranscript && store.status !== 'thinking' && (
         <div className="h-full flex flex-col items-center justify-center text-center opacity-40">
           <p className="text-sm">Start speaking to see the transcript...</p>
         </div>
@@ -49,7 +49,7 @@ export default function LiveTranscript() {
 
       {/* Live AI Transcript */}
       <AnimatePresence>
-        {(store.aiPartialTranscript || store.isThinking) && (
+        {(store.aiPartialTranscript || store.status === 'thinking') && (
           <motion.div
             initial={{ opacity: 0, y: 10, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -60,7 +60,7 @@ export default function LiveTranscript() {
               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-indigo-500/5 to-transparent animate-shimmer" />
               
               <div className="relative z-10">
-                {store.isThinking && !store.aiPartialTranscript ? (
+                {store.status === 'thinking' && !store.aiPartialTranscript ? (
                   <div className="flex items-center gap-1.5 h-6">
                     <span className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
                     <span className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce [animation-delay:-0.15s]"></span>

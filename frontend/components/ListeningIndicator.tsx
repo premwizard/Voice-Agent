@@ -12,21 +12,25 @@ interface ListeningIndicatorProps {
 
 export default function ListeningIndicator({ onToggle, volume = 0 }: ListeningIndicatorProps) {
   const store = useVoiceStore();
-  
+  const status = store.status;
+  const isThinking = status === 'thinking';
+  const isSpeaking = status === 'speaking' || status === 'streaming_response';
+  const isDetectingSpeech = status === 'speech_detected' || status === 'transcribing';
+
   // Calculate dynamic scale based on volume
-  const scale = store.isDetectingSpeech ? 1 + (Math.max(0, volume) / 100) * 0.5 : 1;
+  const scale = isDetectingSpeech ? 1 + (Math.max(0, volume) / 100) * 0.5 : 1;
 
   // Determine state colors
   let innerColor = 'bg-primary text-primary-foreground';
   let glowColor = 'rgba(255,255,255,0)';
   
-  if (store.isSpeaking) {
+  if (isSpeaking) {
     innerColor = 'bg-indigo-500 text-white';
     glowColor = 'rgba(99, 102, 241, 0.4)';
-  } else if (store.isThinking) {
+  } else if (isThinking) {
     innerColor = 'bg-purple-500 text-white';
     glowColor = 'rgba(168, 85, 247, 0.4)';
-  } else if (store.isDetectingSpeech) {
+  } else if (isDetectingSpeech) {
     innerColor = 'bg-emerald-500 text-white';
     glowColor = 'rgba(16, 185, 129, 0.6)';
   } else if (store.isRecording) {
@@ -40,18 +44,18 @@ export default function ListeningIndicator({ onToggle, volume = 0 }: ListeningIn
         
         {/* Dynamic Glow Layer */}
         <AnimatePresence>
-          {(store.isRecording || store.isSpeaking || store.isThinking) && (
+          {(store.isRecording || isSpeaking || isThinking) && (
             <motion.div
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ 
                 opacity: 1, 
-                scale: store.isThinking ? [1, 1.2, 1] : scale,
-                rotate: store.isThinking ? [0, 180, 360] : 0 
+                scale: isThinking ? [1, 1.2, 1] : scale,
+                rotate: isThinking ? [0, 180, 360] : 0 
               }}
               exit={{ opacity: 0, scale: 0.8 }}
               transition={{ 
-                duration: store.isThinking ? 3 : 0.1, 
-                repeat: store.isThinking ? Infinity : 0,
+                duration: isThinking ? 3 : 0.1, 
+                repeat: isThinking ? Infinity : 0,
                 ease: "linear"
               }}
               className="absolute w-32 h-32 rounded-full blur-2xl transition-colors duration-500"
@@ -61,7 +65,7 @@ export default function ListeningIndicator({ onToggle, volume = 0 }: ListeningIn
         </AnimatePresence>
         
         {/* Breathing Ring for Recording */}
-        {store.isRecording && !store.isDetectingSpeech && !store.isThinking && !store.isSpeaking && (
+        {store.isRecording && !isDetectingSpeech && !isThinking && !isSpeaking && (
            <motion.div 
              animate={{ scale: [1, 1.3, 1], opacity: [0.2, 0, 0.2] }}
              transition={{ duration: 2, repeat: Infinity }}
@@ -74,7 +78,7 @@ export default function ListeningIndicator({ onToggle, volume = 0 }: ListeningIn
           onClick={onToggle}
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
-          animate={{ scale: store.isDetectingSpeech ? 1.05 : 1 }}
+          animate={{ scale: isDetectingSpeech ? 1.05 : 1 }}
           className={`relative flex items-center justify-center w-20 h-20 rounded-full shadow-2xl z-10 transition-colors duration-300 ${innerColor}`}
         >
           {store.isRecording ? <MicOff size={28} /> : <Mic size={28} />}
@@ -84,7 +88,7 @@ export default function ListeningIndicator({ onToggle, volume = 0 }: ListeningIn
       {/* Status Text */}
       <div className="mt-8 text-center text-sm font-medium tracking-wide text-muted-foreground h-6 uppercase">
         <AnimatePresence mode="wait">
-          {store.isThinking ? (
+          {isThinking ? (
             <motion.div key="thinking" initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} className="flex items-center justify-center gap-1.5">
               <span className="w-1.5 h-1.5 bg-purple-400 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
               <span className="w-1.5 h-1.5 bg-purple-400 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
@@ -92,10 +96,10 @@ export default function ListeningIndicator({ onToggle, volume = 0 }: ListeningIn
               <span className="ml-2 bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-indigo-400">Processing...</span>
             </motion.div>
           ) : store.isRecording 
-            ? store.isDetectingSpeech 
+            ? isDetectingSpeech 
               ? <motion.span key="hearing" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-emerald-400">Listening to you...</motion.span>
               : <motion.span key="listening" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-rose-400 animate-pulse">Waiting for speech...</motion.span>
-            : store.isSpeaking 
+            : isSpeaking 
               ? <motion.span key="speaking" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-indigo-400">Agent is speaking...</motion.span>
               : <motion.span key="idle" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>Tap microphone to start</motion.span>}
         </AnimatePresence>

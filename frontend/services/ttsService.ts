@@ -34,7 +34,7 @@ class TTSService {
     if (this.isPlaying || this.queue.length === 0) return;
 
     this.isPlaying = true;
-    useVoiceStore.getState().setIsSpeaking(true);
+    useVoiceStore.getState().setStatus('speaking');
 
     const text = this.queue.shift()!;
     const utterance = new SpeechSynthesisUtterance(text);
@@ -49,7 +49,7 @@ class TTSService {
       if (this.queue.length > 0) {
         this.processQueue();
       } else {
-        useVoiceStore.getState().setIsSpeaking(false);
+        useVoiceStore.getState().setStatus('listening');
       }
     };
 
@@ -66,7 +66,7 @@ class TTSService {
     this.queue = [];
     this.synth.cancel();
     this.isPlaying = false;
-    useVoiceStore.getState().setIsSpeaking(false);
+    useVoiceStore.getState().setStatus('listening');
   }
 }
 

@@ -33,6 +33,21 @@ export function useSpeechRecognition() {
       };
 
       recognition.onresult = (event: any) => {
+        const store = useVoiceStore.getState();
+        
+        // Barge-in detection
+        if (store.status === 'speaking' || store.status === 'streaming_response') {
+          console.log("Barge-in detected! Interrupting AI...");
+          import('../services/ttsService').then(({ ttsService }) => ttsService.stop());
+          import('../services/websocket').then(({ wsService }) => wsService.sendMessage('INTERRUPT'));
+          store.setStatus('speech_detected');
+          
+          const { useLatencyStore } = require('../stores/latencyStore');
+          useLatencyStore.getState().incrementInterruptions();
+        } else if (store.status === 'listening' || store.status === 'idle') {
+          store.setStatus('speech_detected');
+        }
+
         let currentInterim = '';
         let currentFinal = '';
 

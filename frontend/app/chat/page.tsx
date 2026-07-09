@@ -4,17 +4,23 @@ import React, { useEffect } from 'react';
 import VoiceAgent from '@/components/VoiceAgent';
 import ChatInterface from '@/components/ChatInterface';
 import { useVoiceStore } from '@/stores/voiceStore';
+import { useConversationStore } from '@/stores/conversationStore';
 import { wsService } from '@/services/websocket';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export default function ChatPage() {
   const store = useVoiceStore();
+  const convStore = useConversationStore();
 
   useEffect(() => {
-    wsService.connect();
+    // Resume the active conversation if one is persisted in localStorage,
+    // otherwise the backend will generate a new conversation ID.
+    const resumeId = convStore.activeConversationId;
+    wsService.connect(resumeId);
     return () => {
       wsService.disconnect();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (

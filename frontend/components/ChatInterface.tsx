@@ -28,7 +28,7 @@ export default function ChatInterface() {
     if (!input.trim()) return;
 
     store.addMessage({ role: 'user', content: input.trim() });
-    store.setIsThinking(true);
+    store.setStatus('thinking');
     wsService.sendMessage('USER_FINAL', input.trim());
     setInput('');
   };
@@ -41,7 +41,7 @@ export default function ChatInterface() {
     // Find last user message
     const lastUserMsg = [...store.messages].reverse().find(m => m.role === 'user');
     if (lastUserMsg) {
-      store.setIsThinking(true);
+      store.setStatus('thinking');
       wsService.sendMessage('USER_FINAL', lastUserMsg.content);
     }
   };
@@ -72,7 +72,7 @@ export default function ChatInterface() {
       </div>
 
       <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar relative z-10">
-        {store.messages.length === 0 && !store.isThinking && !store.aiPartialTranscript && (
+        {store.messages.length === 0 && store.status !== 'thinking' && !store.aiPartialTranscript && (
           <div className="h-full flex flex-col items-center justify-center text-center opacity-50">
             <MessageSquare size={48} className="mb-4" />
             <h3 className="text-xl font-medium mb-2">Start a conversation</h3>
@@ -137,7 +137,7 @@ export default function ChatInterface() {
         ))}
 
         <AnimatePresence>
-          {(store.aiPartialTranscript || store.isThinking) && (
+          {(store.aiPartialTranscript || store.status === 'thinking') && (
             <motion.div
               initial={{ opacity: 0, y: 10, scale: 0.98 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -149,7 +149,7 @@ export default function ChatInterface() {
                 <div className="absolute inset-0 bg-gradient-to-r from-transparent via-indigo-500/5 to-transparent animate-shimmer" />
                 
                 <div className="relative z-10">
-                  {store.isThinking && !store.aiPartialTranscript ? (
+                  {store.status === 'thinking' && !store.aiPartialTranscript ? (
                     <div className="flex items-center gap-1.5 h-6">
                       <span className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
                       <span className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
@@ -200,7 +200,7 @@ export default function ChatInterface() {
           />
           <button 
             type="submit"
-            disabled={!input.trim() || store.isThinking}
+            disabled={!input.trim() || store.status === 'thinking' || store.status === 'streaming_response'}
             className="bg-gradient-to-br from-indigo-500 to-purple-600 hover:from-indigo-400 hover:to-purple-500 disabled:opacity-50 disabled:grayscale text-white w-14 h-14 rounded-2xl flex items-center justify-center transition-all shadow-lg hover:shadow-indigo-500/25 shrink-0"
           >
             <Send size={20} />

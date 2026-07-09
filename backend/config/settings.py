@@ -1,21 +1,50 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import Optional
 
+
 class Settings(BaseSettings):
     # App Settings
     app_name: str = "Voice Agent Backend"
     debug: bool = False
     ai_provider: str = "openrouter"
-    
+
     # AI Keys
     openrouter_api_key: Optional[str] = None
-    
+
     # Model Configuration
     system_prompt: str = "You are a helpful and concise AI voice assistant. Speak naturally."
-    max_history: int = 20
     temperature: float = 0.7
     max_tokens: int = 1024
-    
+
+    # ------------------------------------------------------------------ #
+    # Memory System Configuration (all configurable via .env)
+    # ------------------------------------------------------------------ #
+
+    # Layer 1 — Active context: number of most recent messages always sent to LLM
+    max_active_messages: int = 20
+
+    # Layer 2 — Rolling summary: trigger summarization after this many total messages
+    summary_threshold: int = 30
+
+    # Max character length of a generated summary
+    max_summary_length: int = 2000
+
+    # Layer 3 — Long-term memory: max number of persistent memory items
+    max_memory_items: int = 50
+
+    # Session timeout in seconds (for future session expiry logic)
+    session_timeout: int = 3600
+
+    # Database (SQLite by default; swap prefix for PostgreSQL migration)
+    database_url: str = "sqlite:///./voice_agent.db"
+
+    # Legacy alias kept for backward compat — maps to max_active_messages
+    @property
+    def max_history(self) -> int:
+        return self.max_active_messages
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
+
 settings = Settings()
+

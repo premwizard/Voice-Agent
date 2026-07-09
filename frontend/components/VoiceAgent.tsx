@@ -10,36 +10,36 @@ import { useMicrophone } from '../hooks/useMicrophone';
 import { useVAD } from '../hooks/useVAD';
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
 import { getAudioContext } from '../services/audioContext';
+import LatencyDashboard from './LatencyDashboard';
 
 export default function VoiceAgent() {
   const isRecording = useVoiceStore((state) => state.isRecording);
   const isConnected = useVoiceStore((state) => state.isConnected);
   const setIsRecording = useVoiceStore((state) => state.setIsRecording);
-  const setIsDetectingSpeech = useVoiceStore((state) => state.setIsDetectingSpeech);
+  const setStatus = useVoiceStore((state) => state.setStatus);
   const addMessage = useVoiceStore((state) => state.addMessage);
-  const setIsThinking = useVoiceStore((state) => state.setIsThinking);
 
   const { stream, startMicrophone, stopMicrophone } = useMicrophone();
   const { startRecognition, stopRecognition, flushTranscript } = useSpeechRecognition();
 
   const handleSpeechStart = useCallback(() => {
-    setIsDetectingSpeech(true);
-  }, [setIsDetectingSpeech]);
+    setStatus('speech_detected');
+  }, [setStatus]);
 
   const handleSpeechEnd = useCallback(() => {
-    setIsDetectingSpeech(false);
     // When speech ends due to silence, flush the current transcript and send it!
     const finalSentence = flushTranscript();
     console.log("VoiceAgent: Speech ended, finalSentence:", finalSentence);
     if (finalSentence.trim()) {
       addMessage({ role: 'user', content: finalSentence.trim() });
-      setIsThinking(true);
+      setStatus('thinking');
       console.log("VoiceAgent: Sending USER_FINAL to WS:", finalSentence.trim());
       wsService.sendMessage('USER_FINAL', finalSentence.trim());
     } else {
       console.log("VoiceAgent: No final sentence to send.");
+      setStatus('listening');
     }
-  }, [setIsDetectingSpeech, flushTranscript, addMessage, setIsThinking]);
+  }, [setStatus, flushTranscript, addMessage]);
 
   const { volume } = useVAD({
     stream,
@@ -81,9 +81,9 @@ export default function VoiceAgent() {
     } else {
       stopMicrophone();
       stopRecognition();
-      setIsDetectingSpeech(false);
+      setStatus('idle');
     }
-  }, [isRecording, startMicrophone, stopMicrophone, startRecognition, stopRecognition, setIsDetectingSpeech]);
+  }, [isRecording, startMicrophone, stopMicrophone, startRecognition, stopRecognition, setStatus]);
 
   const toggleRecording = () => {
     if (!isRecording) {
@@ -124,6 +124,7 @@ export default function VoiceAgent() {
       <div className="relative z-10 shrink-0">
         <ListeningIndicator onToggle={toggleRecording} volume={volume} />
       </div>
+      <LatencyDashboard />
     </div>
   );
 }
