@@ -23,6 +23,7 @@ import { useConversationStore } from '../stores/conversationStore';
 import { wsService } from '../services/websocket';
 import { useRouter } from 'next/navigation';
 import type { Conversation } from '../types/conversation';
+import { useUIStore } from '../stores/uiStore';
 
 // ------------------------------------------------------------------ //
 // Helpers
@@ -232,12 +233,10 @@ function ConversationItem({
 }
 
 // ------------------------------------------------------------------ //
-// Main Sidebar
-// ------------------------------------------------------------------ //
-
 export default function Sidebar() {
   const voiceStore = useVoiceStore();
   const convStore = useConversationStore();
+  const setSettingsOpen = useUIStore(state => state.setSettingsOpen);
   const router = useRouter();
 
   const [isExpanded, setIsExpanded] = useState(true);
@@ -506,6 +505,7 @@ export default function Sidebar() {
       {/* Footer */}
       <div className="p-3 border-t border-white/5 shrink-0">
         <button
+          onClick={() => setSettingsOpen(true)}
           className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all text-muted-foreground hover:bg-white/5 hover:text-foreground ${
             isExpanded ? 'justify-start' : 'justify-center'
           }`}

@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import { Toaster } from 'sonner';
 import CommandPalette from '@/components/CommandPalette';
+import GlobalUI from '@/components/GlobalUI';
 import './globals.css';
 
 const inter = Inter({ subsets: ['latin'] });
@@ -22,6 +23,7 @@ export default function RootLayout({
         {children}
         <Toaster position="bottom-right" theme="dark" richColors />
         <CommandPalette />
+        <GlobalUI />
       </body>
     </html>
   );

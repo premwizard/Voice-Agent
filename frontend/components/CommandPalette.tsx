@@ -5,11 +5,13 @@ import { Command } from "cmdk";
 import { Search, Settings, Monitor, Moon, Sun, MessageSquare, Plus, Mic } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useVoiceStore } from "../stores/voiceStore";
+import { useUIStore } from "../stores/uiStore";
 
 export default function CommandPalette() {
   const [open, setOpen] = useState(false);
   const router = useRouter();
   const voiceStore = useVoiceStore();
+  const setSettingsOpen = useUIStore(state => state.setSettingsOpen);
 
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
@@ -82,7 +84,7 @@ export default function CommandPalette() {
             
             <Command.Group heading="Settings" className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
               <Command.Item
-                onSelect={() => runCommand(() => {})}
+                onSelect={() => runCommand(() => setSettingsOpen(true))}
                 className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2.5 text-sm text-foreground hover:bg-white/10 aria-selected:bg-white/10 transition-colors"
               >
                 <Settings className="h-4 w-4" />
