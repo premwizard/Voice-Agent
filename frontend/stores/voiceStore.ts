@@ -101,7 +101,6 @@ export const useVoiceStore = create<VoiceState>()((set) => ({
   setMessages: (messages) => set({ messages }),
   updateMessage: (id, content) =>
     set((state) => ({
-    set((state) => ({
       messages: state.messages.map((msg) =>
         msg.id === id ? { ...msg, content } : msg,
       ),
