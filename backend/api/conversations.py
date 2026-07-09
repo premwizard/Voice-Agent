@@ -8,7 +8,7 @@ import logging
 from datetime import datetime
 from typing import List, Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, UploadFile, File
 from pydantic import BaseModel
 
 from repositories.conversation_repository import ConversationRepository
@@ -16,6 +16,8 @@ from repositories.message_repository import MessageRepository
 from repositories.summary_repository import SummaryRepository
 from repositories.memory_repository import MemoryRepository
 from database.models import Conversation, Message, MemoryItem
+from services.media_manager import media_manager
+from schemas.media import MediaItemSchema
 
 logger = logging.getLogger(__name__)
 
@@ -240,6 +242,25 @@ async def export_conversation(
             lines += [f"[{_dt_str(msg.timestamp)}] {label}:", msg.content, ""]
         return {"content": "\n".join(lines), "filename": f"{conv.title}.txt"}
 
+
+@router.post("/conversations/{conversation_id}/upload", response_model=MediaItemSchema)
+async def upload_media(conversation_id: str, file: UploadFile = File(...)):
+    """Upload a media file (image/document) for a conversation."""
+    content = await file.read()
+    if not content:
+        raise HTTPException(status_code=400, detail="Empty file")
+        
+    try:
+        media_item = await media_manager.save_file(
+            conversation_id=conversation_id,
+            file_name=file.filename,
+            content=content,
+            mime_type=file.content_type or "application/octet-stream"
+        )
+        return media_item
+    except Exception as e:
+        logger.error(f"Error uploading file: {e}")
+        raise HTTPException(status_code=500, detail="Failed to upload file")
 
 # ------------------------------------------------------------------ #
 # Memory endpoints

@@ -21,6 +21,8 @@ from fastapi import WebSocket
 from schemas.ws import WSMessage
 from providers import get_provider
 from services.memory_manager import memory_manager
+from services.input_router import input_router
+from services.vision_context_builder import vision_context_builder
 from config.settings import settings
 
 logger = logging.getLogger(__name__)
@@ -111,20 +113,40 @@ class ConnectionManager:
         websocket: WebSocket,
         conversation_id: str,
         content: str,
+        media_ids: list[str] = None,
     ) -> None:
         full_response = ""
         mode = self._modes.get(conversation_id, "chat")
+        media_ids = media_ids or []
 
         try:
             provider = get_provider()
             provider.initialize()
 
             # Save user message to DB
+            # We would ideally update the memory_manager to accept media_ids here, 
+            # but for now we'll process it and append to the context.
             await memory_manager.save_user_message(
                 conversation_id=conversation_id,
                 content=content,
                 mode=mode,
             )
+            
+            # Process Multimodal Inputs
+            multimodal_context = ""
+            if media_ids:
+                await self._send(
+                    websocket,
+                    WSMessage(type="STATUS", content="Processing media...").model_dump_json(),
+                )
+                router_result = await input_router.process_inputs(conversation_id, content, media_ids)
+                vision_context = vision_context_builder.build_context_from_vision(router_result.get("vision_results", []))
+                ocr_context = vision_context_builder.build_context_from_ocr(router_result.get("ocr_results", []))
+                
+                if vision_context:
+                    multimodal_context += vision_context + "\n"
+                if ocr_context:
+                    multimodal_context += ocr_context + "\n"
 
             # Build 4-layer context
             enriched_system, history = await memory_manager.build_context(
@@ -132,6 +154,10 @@ class ConnectionManager:
                 current_user_message=content,
                 system_prompt=settings.system_prompt,
             )
+            
+            # Inject multimodal context into the prompt
+            if multimodal_context:
+                content = content + "\n" + multimodal_context
 
             start_time = time.time()
             first_token_time = None
@@ -284,8 +310,12 @@ class ConnectionManager:
                         if not existing.done():
                             existing.cancel()
 
+                    media_ids = []
+                    if msg.metadata and "media_ids" in msg.metadata:
+                        media_ids = msg.metadata["media_ids"]
+
                     task = asyncio.create_task(
-                        self._generate_response(websocket, conversation_id, msg.content)
+                        self._generate_response(websocket, conversation_id, msg.content, media_ids)
                     )
                     self.generation_tasks[conversation_id] = task
 

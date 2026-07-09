@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Settings, User, Key, Palette, Monitor, Download, Upload, Info, Moon, Sun } from 'lucide-react';
+import { X, Settings, User, Key, Palette, Monitor, Download, Upload, Info, Moon, Sun, Image as ImageIcon } from 'lucide-react';
 import { useVoiceStore } from '../stores/voiceStore';
 import { toast } from 'sonner';
 
@@ -18,6 +18,7 @@ export default function SettingsDrawer({ open, onOpenChange }: SettingsDrawerPro
   const tabs = [
     { id: 'general', label: 'General', icon: <Settings size={18} /> },
     { id: 'api', label: 'API Keys', icon: <Key size={18} /> },
+    { id: 'multimodal', label: 'Multimodal', icon: <ImageIcon size={18} /> },
     { id: 'appearance', label: 'Appearance', icon: <Palette size={18} /> },
     { id: 'about', label: 'About', icon: <Info size={18} /> },
   ];
@@ -109,6 +110,31 @@ export default function SettingsDrawer({ open, onOpenChange }: SettingsDrawerPro
                         >
                           Save Keys
                         </button>
+                      </div>
+                    )}
+                    
+                    {activeTab === 'multimodal' && (
+                      <div className="space-y-6">
+                        <div>
+                          <h3 className="text-sm font-semibold mb-3">Vision Provider</h3>
+                          <select className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-sm outline-none focus:border-indigo-500">
+                            <option value="gemini">Gemini 2.5 Flash</option>
+                            <option value="openai">OpenAI Vision</option>
+                          </select>
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-semibold mb-3">OCR Provider</h3>
+                          <select className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-sm outline-none focus:border-indigo-500">
+                            <option value="gemini">Gemini 2.5 Flash (Default)</option>
+                          </select>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <h3 className="text-sm font-semibold">Auto OCR</h3>
+                          <label className="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" className="sr-only peer" defaultChecked />
+                            <div className="w-11 h-6 bg-white/20 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-500"></div>
+                          </label>
+                        </div>
                       </div>
                     )}
                     

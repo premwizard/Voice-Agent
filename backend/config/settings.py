@@ -17,6 +17,19 @@ class Settings(BaseSettings):
     max_tokens: int = 1024
 
     # ------------------------------------------------------------------ #
+    # Multimodal Configuration
+    # ------------------------------------------------------------------ #
+    enable_multimodal: bool = True
+    enable_vision: bool = True
+    enable_ocr: bool = True
+    max_image_size: int = 10485760  # 10MB
+    max_file_size: int = 52428800   # 50MB
+    vision_provider: str = "gemini"
+    ocr_provider: str = "gemini"
+    auto_ocr: bool = True
+    auto_rag: bool = True
+
+    # ------------------------------------------------------------------ #
     # Memory System Configuration (all configurable via .env)
     # ------------------------------------------------------------------ #
 

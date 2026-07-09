@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS messages (
     content         TEXT NOT NULL,
     timestamp       TEXT NOT NULL,
     mode            TEXT NOT NULL DEFAULT 'chat',
+    media_ids       TEXT,
     metadata        TEXT
 );
 
@@ -72,6 +73,19 @@ CREATE TABLE IF NOT EXISTS session_metadata (
     model                   TEXT NOT NULL DEFAULT 'google/gemini-2.5-flash',
     total_tokens_estimated  INTEGER NOT NULL DEFAULT 0,
     voice_seconds           REAL NOT NULL DEFAULT 0.0
+);
+
+CREATE TABLE IF NOT EXISTS media_items (
+    id              TEXT PRIMARY KEY,
+    conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+    file_name       TEXT NOT NULL,
+    file_path       TEXT NOT NULL,
+    mime_type       TEXT NOT NULL,
+    size_bytes      INTEGER NOT NULL,
+    status          TEXT NOT NULL DEFAULT 'uploaded',
+    created_at      TEXT NOT NULL,
+    updated_at      TEXT NOT NULL,
+    metadata        TEXT
 );
 
 CREATE TABLE IF NOT EXISTS documents (

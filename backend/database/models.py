@@ -22,6 +22,7 @@ class Message:
     content: str
     timestamp: datetime
     mode: str = "chat"  # 'voice' | 'chat'
+    media_ids: Optional[list[str]] = field(default_factory=list)
     metadata: Optional[dict] = None
 
 
@@ -43,6 +44,20 @@ class MemoryItem:
     confidence: float = 1.0
     created_at: datetime = field(default_factory=datetime.utcnow)
     updated_at: datetime = field(default_factory=datetime.utcnow)
+
+
+@dataclass
+class MediaItem:
+    id: str
+    conversation_id: str
+    file_name: str
+    file_path: str
+    mime_type: str
+    size_bytes: int
+    status: str  # 'uploaded' | 'processing' | 'processed' | 'error'
+    created_at: datetime = field(default_factory=datetime.utcnow)
+    updated_at: datetime = field(default_factory=datetime.utcnow)
+    metadata: Optional[dict] = None
 
 
 @dataclass

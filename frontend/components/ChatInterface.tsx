@@ -9,6 +9,10 @@ import { Send, Copy, RotateCcw, Trash2, Edit2, Check, MessageSquare, ThumbsUp, T
 import { motion, AnimatePresence } from 'framer-motion';
 import TextareaAutosize from 'react-textarea-autosize';
 import { EmptyState } from './ui/EmptyState';
+import { FileUploadZone } from './ui/FileUploadZone';
+import { MediaGallery } from './MediaGallery';
+import { VisionStatus } from './VisionStatus';
+import { ImagePreview } from './ImagePreview';
 
 export default function ChatInterface() {
   const store = useVoiceStore();
@@ -17,6 +21,11 @@ export default function ChatInterface() {
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState('');
+
+  const [uploadedMedia, setUploadedMedia] = useState<any[]>([]);
+  const [previewMediaId, setPreviewMediaId] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [visionStatusMsg, setVisionStatusMsg] = useState<string>('');
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -28,12 +37,15 @@ export default function ChatInterface() {
 
   const handleSubmit = (e?: React.FormEvent) => {
     e?.preventDefault();
-    if (!input.trim() || store.status === 'thinking' || store.status === 'streaming_response') return;
+    if ((!input.trim() && uploadedMedia.length === 0) || store.status === 'thinking' || store.status === 'streaming_response') return;
 
-    store.addMessage({ role: 'user', content: input.trim() });
+    const currentInput = input.trim();
+    store.addMessage({ role: 'user', content: currentInput || "(Sent media)" });
     store.setStatus('thinking');
-    wsService.sendMessage('USER_FINAL', input.trim());
+    setVisionStatusMsg('');
+    wsService.sendMessage('USER_FINAL', currentInput, { media_ids: uploadedMedia.map(m => m.id) });
     setInput('');
+    setUploadedMedia([]);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -76,6 +88,51 @@ export default function ChatInterface() {
     wsService.sendMessage('USER_EDIT', editContent, { message_id: id });
   };
 
+  const handleUpload = async (files: File[]) => {
+    const activeId = useConversationStore.getState().activeConversationId;
+    if (!activeId) return;
+
+    setIsUploading(true);
+    for (const file of files) {
+      const formData = new FormData();
+      formData.append("file", file);
+      
+      try {
+        // Assume API runs on port 8000. In production this would use config
+        const response = await fetch(`http://localhost:8000/api/conversations/${activeId}/upload`, {
+          method: "POST",
+          body: formData,
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setUploadedMedia((prev) => [...prev, data]);
+        }
+      } catch (err) {
+        console.error("Upload failed", err);
+      }
+    }
+    setIsUploading(false);
+  };
+
+  // Listen for STATUS messages from WS
+  useEffect(() => {
+    const handleWsMessage = (event: MessageEvent) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === 'STATUS') {
+          setVisionStatusMsg(data.content);
+        } else if (data.type === 'AI_FINAL' || data.type === 'AI_STREAM') {
+          setVisionStatusMsg('');
+        }
+      } catch (e) {}
+    };
+    
+    // Check if websocket has addEventListener, otherwise we skip this part.
+    // The wsService would ideally emit events we can hook into. 
+    // Assuming wsService doesn't have a direct event emitter for STATUS, 
+    // we would handle it in the store, but for now we'll rely on global store updates if available.
+  }, []);
+
   return (
     <div className="flex flex-col h-full glass-panel rounded-3xl overflow-hidden shadow-2xl relative">
       <div className="flex justify-between items-center px-6 py-4 glass border-b border-white/5 z-10 shrink-0">
@@ -103,8 +160,9 @@ export default function ChatInterface() {
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar relative z-10">
-        {store.messages.length === 0 && store.status !== 'thinking' && !store.aiPartialTranscript && (
+      <FileUploadZone onUpload={handleUpload}>
+        <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar relative z-10 h-full">
+          {store.messages.length === 0 && store.status !== 'thinking' && !store.aiPartialTranscript && (
           <EmptyState 
             title="Start a conversation"
             description="Ask me anything, or switch to Voice Mode to talk naturally with the AI."
@@ -227,9 +285,19 @@ export default function ChatInterface() {
         </AnimatePresence>
 
         <div ref={messagesEndRef} className="h-4" />
-      </div>
+        </div>
+      </FileUploadZone>
 
       <div className="p-4 sm:p-6 glass border-t border-white/5 z-10 shrink-0">
+        <div className="w-full max-w-4xl mx-auto mb-2 flex flex-col justify-start">
+           <VisionStatus status={visionStatusMsg} />
+           <MediaGallery 
+              items={uploadedMedia} 
+              onRemove={(id) => setUploadedMedia(prev => prev.filter(m => m.id !== id))} 
+              onPreview={setPreviewMediaId} 
+           />
+           {isUploading && <span className="text-sm text-muted-foreground ml-2 my-auto">Uploading...</span>}
+        </div>
         <div className="flex flex-col relative max-w-4xl mx-auto">
           <form onSubmit={handleSubmit} className="flex gap-3 items-end bg-white/5 hover:bg-white/10 focus-within:bg-white/10 border border-white/10 rounded-2xl p-2 transition-all shadow-inner focus-within:border-indigo-500/50">
             <TextareaAutosize
@@ -255,6 +323,10 @@ export default function ChatInterface() {
           </div>
         </div>
       </div>
+      
+      {previewMediaId && (
+        <ImagePreview url="" onClose={() => setPreviewMediaId(null)} />
+      )}
     </div>
   );
 }
