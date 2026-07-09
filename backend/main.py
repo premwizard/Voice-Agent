@@ -9,6 +9,8 @@ from api.conversations import router as conversations_router
 from api.documents import router as documents_router
 from api.auth import router as auth_router
 from api.mcp import router as mcp_router
+from api.prompts import router as prompts_router
+from api.observability import router as observability_router
 
 import uuid
 import logging
@@ -44,6 +46,8 @@ app.include_router(auth_router)
 app.include_router(mcp_router)
 app.include_router(conversations_router)
 app.include_router(documents_router)
+app.include_router(prompts_router)
+app.include_router(observability_router)
 
 @app.get("/")
 def read_root():

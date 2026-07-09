@@ -5,7 +5,7 @@ import { useVoiceStore } from '../stores/voiceStore';
 import { useConversationStore } from '../stores/conversationStore';
 import { wsService } from '../services/websocket';
 import MarkdownMessage from './MarkdownMessage';
-import { Send, Copy, RotateCcw, Trash2, Edit2, Check, MessageSquare, ThumbsUp, ThumbsDown } from 'lucide-react';
+import { Send, Copy, RotateCcw, Trash2, Edit2, Check, MessageSquare, ThumbsUp, ThumbsDown, Activity } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import TextareaAutosize from 'react-textarea-autosize';
 import { EmptyState } from './ui/EmptyState';
@@ -66,6 +66,23 @@ export default function ChatInterface() {
     if (lastUserMsg) {
       store.setStatus('thinking');
       wsService.sendMessage('USER_FINAL', lastUserMsg.content);
+    }
+  };
+
+  const handleFeedback = async (traceId: string, rating: number) => {
+    try {
+      const token = localStorage.getItem('token');
+      await fetch('http://127.0.0.1:8000/api/observability/feedback', {
+        method: 'POST',
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ trace_id: traceId, rating })
+      });
+      alert('Feedback submitted!');
+    } catch (e) {
+      console.error(e);
     }
   };
 
@@ -214,12 +231,26 @@ export default function ChatInterface() {
                     <RotateCcw size={14} />
                   </button>
                   <div className="w-px h-4 bg-white/10 my-auto mx-1"></div>
-                  <button onClick={() => {}} className="p-1.5 text-muted-foreground hover:text-emerald-400 hover:bg-emerald-400/10 rounded-lg transition-colors" title="Like">
-                    <ThumbsUp size={14} />
-                  </button>
-                  <button onClick={() => {}} className="p-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors" title="Dislike">
-                    <ThumbsDown size={14} />
-                  </button>
+                  {msg.traceUrl && (
+                    <>
+                      <button onClick={() => {
+                          const traceId = msg.traceUrl!.split('/').pop()!;
+                          handleFeedback(traceId, 1);
+                        }} className="p-1.5 text-muted-foreground hover:text-emerald-400 hover:bg-emerald-400/10 rounded-lg transition-colors" title="Like">
+                        <ThumbsUp size={14} />
+                      </button>
+                      <button onClick={() => {
+                          const traceId = msg.traceUrl!.split('/').pop()!;
+                          handleFeedback(traceId, -1);
+                        }} className="p-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors" title="Dislike">
+                        <ThumbsDown size={14} />
+                      </button>
+                      <div className="w-px h-4 bg-white/10 my-auto mx-1"></div>
+                      <a href={msg.traceUrl} target="_blank" rel="noopener noreferrer" className="p-1.5 text-muted-foreground hover:text-blue-400 hover:bg-blue-400/10 rounded-lg transition-colors" title="View Trace">
+                        <Activity size={14} />
+                      </a>
+                    </>
+                  )}
                 </div>
               )}
               {msg.role === 'user' && !editingId && (

@@ -4,6 +4,7 @@ import time
 from typing import Callable, Awaitable, Dict
 from schemas.workflow import TaskGraph, Task
 from schemas.agent import AgentStatusUpdate
+from services.trace_service import trace_service
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +67,8 @@ class WorkflowEngine:
         while task.retry_count <= task.max_retries:
             try:
                 # Execute agent handler with timeout
-                await asyncio.wait_for(handler(task, workflow_id), timeout=task.timeout_seconds)
+                with trace_service.Span(name=f"task_{task.id}_{task.agent_name}", metadata={"workflow_id": workflow_id}):
+                    await asyncio.wait_for(handler(task, workflow_id), timeout=task.timeout_seconds)
                 await self._emit_status(task, "completed", "Task completed successfully")
                 return
             except asyncio.TimeoutError:

@@ -27,6 +27,8 @@ from config.settings import settings
 from services.agent_orchestrator import agent_orchestrator
 from schemas.agent import AgentStatusUpdate
 from services.trace_service import trace_service
+from services.prompt_registry import prompt_registry
+from services.evaluation_service import evaluation_service
 
 logger = logging.getLogger(__name__)
 
@@ -159,11 +161,17 @@ class ConnectionManager:
                 if ocr_context:
                     multimodal_context += ocr_context + "\n"
 
+            system_prompt = await prompt_registry.get_prompt(
+                workspace_id=workspace_id,
+                name="system_prompt",
+                default_content=settings.system_prompt
+            )
+
             # Build 4-layer context
             enriched_system, history = await memory_manager.build_context(
                 conversation_id=conversation_id,
                 current_user_message=content,
-                system_prompt=settings.system_prompt,
+                system_prompt=system_prompt,
             )
             
             # Inject multimodal context into the prompt
@@ -254,6 +262,12 @@ class ConnectionManager:
                         type="TRACE_URL",
                         content=f"/dashboard/traces/{trace.id}"
                     ).model_dump_json(),
+                )
+                # Fire-and-forget evaluation
+                asyncio.create_task(
+                    evaluation_service.evaluate_trace(
+                        trace.id, workspace_id, content, full_response
+                    )
                 )
 
         except asyncio.CancelledError:

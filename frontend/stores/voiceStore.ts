@@ -8,6 +8,7 @@ export interface ChatMessage {
   content: string;
   timestamp: number;
   mode?: 'voice' | 'chat';
+  traceUrl?: string;
 }
 
 export type ConversationState =
@@ -49,9 +50,9 @@ interface VoiceState {
   // History
   messages: ChatMessage[];
   addMessage: (msg: Omit<ChatMessage, 'id' | 'timestamp'>) => void;
-  /** Bulk-load persisted messages from DB (called on HISTORY_LOAD). */
   setMessages: (messages: ChatMessage[]) => void;
   updateMessage: (id: string, content: string) => void;
+  updateMessageTraceUrl: (id: string, traceUrl: string) => void;
   deleteMessage: (id: string) => void;
   clearMessages: () => void;
 
@@ -100,8 +101,15 @@ export const useVoiceStore = create<VoiceState>()((set) => ({
   setMessages: (messages) => set({ messages }),
   updateMessage: (id, content) =>
     set((state) => ({
+    set((state) => ({
       messages: state.messages.map((msg) =>
         msg.id === id ? { ...msg, content } : msg,
+      ),
+    })),
+  updateMessageTraceUrl: (id, traceUrl) =>
+    set((state) => ({
+      messages: state.messages.map((msg) =>
+        msg.id === id ? { ...msg, traceUrl } : msg,
       ),
     })),
   deleteMessage: (id) =>

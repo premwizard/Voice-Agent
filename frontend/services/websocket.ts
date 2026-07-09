@@ -203,6 +203,14 @@ class WebSocketService {
           break;
         }
 
+        case 'TRACE_URL': {
+          const lastMsg = voiceStore.messages[voiceStore.messages.length - 1];
+          if (lastMsg && lastMsg.role === 'assistant') {
+            voiceStore.updateMessageTraceUrl(lastMsg.id, message.content);
+          }
+          break;
+        }
+
         case 'ERROR': {
           console.error('[WS] Server Error:', message.content);
           voiceStore.setStatus('error');
