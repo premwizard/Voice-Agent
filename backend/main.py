@@ -8,6 +8,7 @@ from database.db import init_db
 from api.conversations import router as conversations_router
 from api.documents import router as documents_router
 from api.auth import router as auth_router
+from api.mcp import router as mcp_router
 
 import uuid
 import logging
@@ -40,6 +41,7 @@ app.add_middleware(
 
 # Register REST API router
 app.include_router(auth_router)
+app.include_router(mcp_router)
 app.include_router(conversations_router)
 app.include_router(documents_router)
 

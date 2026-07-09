@@ -17,11 +17,13 @@ import {
   Pencil,
   Check,
   MoreHorizontal,
+  LogOut,
+  Server,
 } from 'lucide-react';
 import { useVoiceStore } from '../stores/voiceStore';
 import { useConversationStore } from '../stores/conversationStore';
 import { wsService } from '../services/websocket';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import type { Conversation } from '../types/conversation';
 import { useUIStore } from '../stores/uiStore';
 import { ContextMenu, ContextMenuTrigger, ContextMenuContent, ContextMenuItem, ContextMenuSeparator } from './ui/ContextMenu';
@@ -189,6 +191,7 @@ export default function Sidebar() {
   const convStore = useConversationStore();
   const setSettingsOpen = useUIStore(state => state.setSettingsOpen);
   const router = useRouter();
+  const pathname = usePathname();
 
   const [isExpanded, setIsExpanded] = useState(true);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
@@ -467,6 +470,14 @@ export default function Sidebar() {
 
       {/* Footer */}
       <div className="p-3 border-t border-white/5 shrink-0">
+        <button
+          onClick={() => router.push('/mcp')}
+          className={`w-full flex items-center gap-3 p-3 rounded-xl transition-colors font-medium text-sm ${pathname === '/mcp' ? 'bg-indigo-500/20 text-indigo-400' : 'text-muted-foreground hover:bg-white/5 hover:text-foreground'}`}
+        >
+          <Server size={18} />
+          {isExpanded && <span className="whitespace-nowrap font-medium">MCP Integrations</span>}
+        </button>
+
         <button
           onClick={() => setSettingsOpen(true)}
           className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all text-muted-foreground hover:bg-white/5 hover:text-foreground ${
