@@ -38,6 +38,20 @@ class Settings(BaseSettings):
     # Database (SQLite by default; swap prefix for PostgreSQL migration)
     database_url: str = "sqlite:///./voice_agent.db"
 
+    # ------------------------------------------------------------------ #
+    # RAG System Configuration
+    # ------------------------------------------------------------------ #
+    enable_rag: bool = True
+    embedding_provider: str = "gemini" # 'gemini' or 'openai'
+    vector_store: str = "chroma"
+    top_k: int = 4
+    chunk_size: int = 1000
+    chunk_overlap: int = 200
+    similarity_threshold: float = 0.5
+    
+    # Gemini specific config
+    gemini_api_key: Optional[str] = None
+    
     # Legacy alias kept for backward compat — maps to max_active_messages
     @property
     def max_history(self) -> int:

@@ -30,15 +30,16 @@ class ContextBuilder:
         current_user_message: str,
         summary: Optional[Summary] = None,
         memory_items: Optional[List[MemoryItem]] = None,
+        rag_context: Optional[str] = None,
     ) -> tuple[str, List[Dict[str, str]]]:
         """
         Returns (enriched_system_prompt, history_list) ready to pass to a provider.
-
-        The enriched system prompt includes long-term memory and conversation summary.
-        The history_list contains only the recent active-context messages.
-        The current_user_message is NOT included in history (the provider appends it).
         """
         system_parts = [system_prompt.strip()]
+        
+        # Layer 4 — RAG Context
+        if rag_context and rag_context.strip():
+            system_parts.append(rag_context.strip())
 
         # Layer 3 — Long-Term Memory
         if memory_items:

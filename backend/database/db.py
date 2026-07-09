@@ -73,6 +73,33 @@ CREATE TABLE IF NOT EXISTS session_metadata (
     total_tokens_estimated  INTEGER NOT NULL DEFAULT 0,
     voice_seconds           REAL NOT NULL DEFAULT 0.0
 );
+
+CREATE TABLE IF NOT EXISTS documents (
+    id                  TEXT PRIMARY KEY,
+    filename            TEXT NOT NULL,
+    file_type           TEXT NOT NULL,
+    file_size           INTEGER NOT NULL,
+    status              TEXT NOT NULL DEFAULT 'pending',
+    chunk_count         INTEGER NOT NULL DEFAULT 0,
+    embedding_provider  TEXT,
+    vector_store        TEXT,
+    created_at          TEXT NOT NULL,
+    updated_at          TEXT NOT NULL,
+    error_message       TEXT
+);
+
+CREATE TABLE IF NOT EXISTS document_chunks (
+    id                  TEXT PRIMARY KEY,
+    document_id         TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+    chunk_index         INTEGER NOT NULL,
+    text_content        TEXT NOT NULL,
+    page_number         INTEGER,
+    vector_id           TEXT,
+    created_at          TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_document_chunks_doc
+    ON document_chunks(document_id);
 """
 
 
