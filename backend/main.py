@@ -71,12 +71,27 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(None)):
         await websocket.close(code=1008, reason="Invalid token")
         return
 
+    # Get default workspace for the user
+    try:
+        from database.db import get_db
+        async with get_db() as conn:
+            cursor = await conn.execute("SELECT id FROM workspaces WHERE user_id = ? LIMIT 1", (user_id,))
+            workspace = await cursor.fetchone()
+            if not workspace:
+                await websocket.close(code=1008, reason="Workspace not found")
+                return
+            workspace_id = workspace["id"]
+    except Exception as e:
+        logger.error(f"Error fetching workspace: {e}")
+        await websocket.close(code=1008, reason="Internal error")
+        return
+
     # Accept an optional conversation_id query param for session resumption.
     # If not provided, generate a new unique ID (preserves existing behavior).
     conversation_id = websocket.query_params.get("conversation_id") or str(uuid.uuid4())
     mode = websocket.query_params.get("mode", "chat")
 
-    await manager.connect(websocket, conversation_id, mode=mode)
+    await manager.connect(websocket, conversation_id, workspace_id, mode=mode)
     try:
         while True:
             data = await websocket.receive_text()

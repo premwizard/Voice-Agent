@@ -24,6 +24,7 @@ def _now_iso() -> str:
 def _row_to_conv(row) -> Conversation:
     return Conversation(
         id=row["id"],
+        workspace_id=row.get("workspace_id", "default"),
         title=row["title"],
         created_at=datetime.strptime(row["created_at"], _DT_FMT),
         updated_at=datetime.strptime(row["updated_at"], _DT_FMT),
@@ -38,6 +39,7 @@ class ConversationRepository:
     async def create(
         self,
         conversation_id: str,
+        workspace_id: str,
         title: str = "New Conversation",
         mode: str = "chat",
     ) -> Conversation:
@@ -45,15 +47,16 @@ class ConversationRepository:
         async with db_connection() as conn:
             await conn.execute(
                 """
-                INSERT INTO conversations (id, title, created_at, updated_at, message_count, is_pinned, mode)
-                VALUES (?, ?, ?, ?, 0, 0, ?)
+                INSERT INTO conversations (id, workspace_id, title, created_at, updated_at, message_count, is_pinned, mode)
+                VALUES (?, ?, ?, ?, ?, 0, 0, ?)
                 """,
-                (conversation_id, title, now, now, mode),
+                (conversation_id, workspace_id, title, now, now, mode),
             )
             await conn.commit()
-        logger.info(f"Created conversation: {conversation_id}")
+        logger.info(f"Created conversation: {conversation_id} for workspace {workspace_id}")
         return Conversation(
             id=conversation_id,
+            workspace_id=workspace_id,
             title=title,
             created_at=datetime.strptime(now, _DT_FMT),
             updated_at=datetime.strptime(now, _DT_FMT),

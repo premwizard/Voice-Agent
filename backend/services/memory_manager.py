@@ -48,11 +48,12 @@ class MemoryManager:
     async def ensure_conversation(
         self,
         conversation_id: str,
+        workspace_id: str,
         mode: str = "chat",
     ) -> None:
         """Create the conversation record if it doesn't already exist."""
         if not await _conv_repo.exists(conversation_id):
-            await _conv_repo.create(conversation_id, mode=mode)
+            await _conv_repo.create(conversation_id, workspace_id, mode=mode)
 
     # ------------------------------------------------------------------ #
     # Message persistence

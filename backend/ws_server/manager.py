@@ -41,6 +41,7 @@ class ConnectionManager:
         self,
         websocket: WebSocket,
         conversation_id: str,
+        workspace_id: str,
         mode: str = "chat",
     ) -> None:
         await websocket.accept()
@@ -48,7 +49,7 @@ class ConnectionManager:
         self._modes[conversation_id] = mode
 
         # Ensure conversation record exists in DB
-        await memory_manager.ensure_conversation(conversation_id, mode=mode)
+        await memory_manager.ensure_conversation(conversation_id, workspace_id, mode=mode)
 
         # Send CONNECTED with the conversation_id
         await self._send(
