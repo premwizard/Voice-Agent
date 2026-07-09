@@ -4,8 +4,10 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useVoiceStore } from '../stores/voiceStore';
 import { wsService } from '../services/websocket';
 import MarkdownMessage from './MarkdownMessage';
-import { Send, Copy, RotateCcw, Trash2, Edit2, Check, MessageSquare } from 'lucide-react';
+import { Send, Copy, RotateCcw, Trash2, Edit2, Check, MessageSquare, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import TextareaAutosize from 'react-textarea-autosize';
+import { EmptyState } from './ui/EmptyState';
 
 export default function ChatInterface() {
   const store = useVoiceStore();
@@ -23,14 +25,21 @@ export default function ChatInterface() {
     scrollToBottom();
   }, [store.messages, store.aiPartialTranscript]);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!input.trim()) return;
+  const handleSubmit = (e?: React.FormEvent) => {
+    e?.preventDefault();
+    if (!input.trim() || store.status === 'thinking' || store.status === 'streaming_response') return;
 
     store.addMessage({ role: 'user', content: input.trim() });
     store.setStatus('thinking');
     wsService.sendMessage('USER_FINAL', input.trim());
     setInput('');
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit();
+    }
   };
 
   const handleCopy = (content: string) => {
@@ -73,11 +82,10 @@ export default function ChatInterface() {
 
       <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar relative z-10">
         {store.messages.length === 0 && store.status !== 'thinking' && !store.aiPartialTranscript && (
-          <div className="h-full flex flex-col items-center justify-center text-center opacity-50">
-            <MessageSquare size={48} className="mb-4" />
-            <h3 className="text-xl font-medium mb-2">Start a conversation</h3>
-            <p className="text-sm max-w-sm">Ask me anything or switch to Voice Mode to talk naturally.</p>
-          </div>
+          <EmptyState 
+            title="Start a conversation"
+            description="Ask me anything, or switch to Voice Mode to talk naturally with the AI."
+          />
         )}
 
         {store.messages.map((msg) => (
@@ -116,12 +124,19 @@ export default function ChatInterface() {
 
               {/* Action Buttons */}
               {msg.role === 'assistant' && !editingId && (
-                <div className="absolute -bottom-10 left-0 opacity-0 group-hover:opacity-100 transition-all duration-300 flex gap-1 bg-surface/80 backdrop-blur-md rounded-xl p-1 border border-white/10 shadow-xl">
+                <div className="absolute -bottom-10 left-0 opacity-0 group-hover:opacity-100 transition-all duration-300 flex gap-1 bg-surface/80 backdrop-blur-md rounded-xl p-1 border border-white/10 shadow-xl z-20">
                   <button onClick={() => handleCopy(msg.content)} className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-white/10 rounded-lg transition-colors" title="Copy">
                     <Copy size={14} />
                   </button>
                   <button onClick={handleRegenerate} className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-white/10 rounded-lg transition-colors" title="Regenerate">
                     <RotateCcw size={14} />
+                  </button>
+                  <div className="w-px h-4 bg-white/10 my-auto mx-1"></div>
+                  <button onClick={() => {}} className="p-1.5 text-muted-foreground hover:text-emerald-400 hover:bg-emerald-400/10 rounded-lg transition-colors" title="Like">
+                    <ThumbsUp size={14} />
+                  </button>
+                  <button onClick={() => {}} className="p-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors" title="Dislike">
+                    <ThumbsDown size={14} />
                   </button>
                 </div>
               )}
@@ -156,7 +171,9 @@ export default function ChatInterface() {
                       <span className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce"></span>
                     </div>
                   ) : (
-                    <MarkdownMessage content={store.aiPartialTranscript} />
+                    <div className="streaming-content">
+                      <MarkdownMessage content={store.aiPartialTranscript + ' ▍'} />
+                    </div>
                   )}
                 </div>
               </div>
@@ -190,24 +207,29 @@ export default function ChatInterface() {
       </div>
 
       <div className="p-4 sm:p-6 glass border-t border-white/5 z-10 shrink-0">
-        <form onSubmit={handleSubmit} className="flex gap-3 relative max-w-4xl mx-auto">
-          <input
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Type your message here..."
-            className="flex-1 bg-white/5 hover:bg-white/10 focus:bg-white/10 border border-white/10 rounded-2xl px-6 py-4 outline-none focus:border-indigo-500/50 transition-all shadow-inner text-[15px]"
-          />
-          <button 
-            type="submit"
-            disabled={!input.trim() || store.status === 'thinking' || store.status === 'streaming_response'}
-            className="bg-gradient-to-br from-indigo-500 to-purple-600 hover:from-indigo-400 hover:to-purple-500 disabled:opacity-50 disabled:grayscale text-white w-14 h-14 rounded-2xl flex items-center justify-center transition-all shadow-lg hover:shadow-indigo-500/25 shrink-0"
-          >
-            <Send size={20} />
-          </button>
-        </form>
-        <div className="text-center mt-3 text-xs text-muted-foreground opacity-60">
-          AI can make mistakes. Verify important information.
+        <div className="flex flex-col relative max-w-4xl mx-auto">
+          <form onSubmit={handleSubmit} className="flex gap-3 items-end bg-white/5 hover:bg-white/10 focus-within:bg-white/10 border border-white/10 rounded-2xl p-2 transition-all shadow-inner focus-within:border-indigo-500/50">
+            <TextareaAutosize
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Type your message here... (Shift+Enter for new line)"
+              minRows={1}
+              maxRows={6}
+              className="flex-1 bg-transparent px-4 py-3 outline-none text-[15px] resize-none overflow-hidden custom-scrollbar leading-relaxed"
+            />
+            <button 
+              type="submit"
+              disabled={!input.trim() || store.status === 'thinking' || store.status === 'streaming_response'}
+              className="bg-gradient-to-br from-indigo-500 to-purple-600 hover:from-indigo-400 hover:to-purple-500 disabled:opacity-50 disabled:grayscale text-white w-12 h-12 rounded-xl flex items-center justify-center transition-all shadow-lg hover:shadow-indigo-500/25 shrink-0 mb-1 mr-1"
+            >
+              <Send size={18} className={input.trim() ? "translate-x-0.5 -translate-y-0.5" : ""} />
+            </button>
+          </form>
+          <div className="flex justify-between items-center mt-2 px-2 text-xs text-muted-foreground opacity-60">
+            <span>{input.length} characters</span>
+            <span>AI can make mistakes. Verify important information.</span>
+          </div>
         </div>
       </div>
     </div>

@@ -24,6 +24,7 @@ import { wsService } from '../services/websocket';
 import { useRouter } from 'next/navigation';
 import type { Conversation } from '../types/conversation';
 import { useUIStore } from '../stores/uiStore';
+import { ContextMenu, ContextMenuTrigger, ContextMenuContent, ContextMenuItem, ContextMenuSeparator } from './ui/ContextMenu';
 
 // ------------------------------------------------------------------ //
 // Helpers
@@ -121,114 +122,62 @@ function ConversationItem({
     );
 
   return (
-    <div
-      className={`group relative flex items-center gap-2 px-3 py-2.5 rounded-xl cursor-pointer transition-all ${
-        isActive
-          ? 'bg-white/10 text-foreground'
-          : 'text-muted-foreground hover:bg-white/5 hover:text-foreground'
-      } ${isExpanded ? '' : 'justify-center'}`}
-      onClick={() => !isEditing && onSelect(conv.id)}
-      title={!isExpanded ? conv.title : undefined}
-    >
-      {icon}
+    <ContextMenu>
+      <ContextMenuTrigger asChild>
+        <div
+          className={`group relative flex items-center gap-2 px-3 py-2.5 rounded-xl cursor-pointer transition-all ${
+            isActive
+              ? 'bg-white/10 text-foreground'
+              : 'text-muted-foreground hover:bg-white/5 hover:text-foreground'
+          } ${isExpanded ? '' : 'justify-center'}`}
+          onClick={() => !isEditing && onSelect(conv.id)}
+          title={!isExpanded ? conv.title : undefined}
+        >
+          {icon}
 
-      {isExpanded && (
-        <div className="flex-1 min-w-0">
-          {isEditing ? (
-            <input
-              ref={inputRef}
-              value={editTitle}
-              onChange={(e) => setEditTitle(e.target.value)}
-              onBlur={saveEdit}
-              onKeyDown={handleKeyDown}
-              onClick={(e) => e.stopPropagation()}
-              className="w-full bg-white/10 text-foreground text-sm rounded-lg px-2 py-0.5 outline-none focus:ring-1 focus:ring-indigo-500/50"
-            />
-          ) : (
-            <p className="text-sm truncate leading-tight">{conv.title}</p>
+          {isExpanded && (
+            <div className="flex-1 min-w-0">
+              {isEditing ? (
+                <input
+                  ref={inputRef}
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  onBlur={saveEdit}
+                  onKeyDown={handleKeyDown}
+                  onClick={(e) => e.stopPropagation()}
+                  className="w-full bg-white/10 text-foreground text-sm rounded-lg px-2 py-0.5 outline-none focus:ring-1 focus:ring-indigo-500/50"
+                />
+              ) : (
+                <p className="text-sm truncate leading-tight">{conv.title}</p>
+              )}
+              <p className="text-[10px] text-muted-foreground/50 mt-0.5">
+                {formatRelativeTime(conv.updated_at)}
+              </p>
+            </div>
           )}
-          <p className="text-[10px] text-muted-foreground/50 mt-0.5">
-            {formatRelativeTime(conv.updated_at)}
-          </p>
+
+          {isExpanded && conv.is_pinned && (
+            <Pin size={10} className="shrink-0 text-indigo-400/70 rotate-45" />
+          )}
         </div>
-      )}
-
-      {isExpanded && conv.is_pinned && (
-        <Pin size={10} className="shrink-0 text-indigo-400/70 rotate-45" />
-      )}
-
-      {/* Context menu trigger */}
-      {isExpanded && !isEditing && (
-        <div className="relative" ref={menuRef}>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setShowMenu((v) => !v);
-            }}
-            className="p-1 opacity-0 group-hover:opacity-100 hover:bg-white/10 rounded-lg transition-all"
-            title="Options"
-          >
-            <MoreHorizontal size={14} />
-          </button>
-
-          <AnimatePresence>
-            {showMenu && (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95, y: -4 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95, y: -4 }}
-                transition={{ duration: 0.1 }}
-                className="absolute right-0 top-7 z-50 w-44 bg-surface/95 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl overflow-hidden"
-              >
-                <button
-                  onClick={(e) => { e.stopPropagation(); startEdit(); }}
-                  className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm hover:bg-white/5 transition-colors text-left"
-                >
-                  <Pencil size={13} /> Rename
-                </button>
-                <button
-                  onClick={(e) => { e.stopPropagation(); onPin(conv.id); setShowMenu(false); }}
-                  className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm hover:bg-white/5 transition-colors text-left"
-                >
-                  <Pin size={13} /> {conv.is_pinned ? 'Unpin' : 'Pin'}
-                </button>
-                <div className="border-t border-white/5 my-1" />
-                {!showDeleteConfirm ? (
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setShowDeleteConfirm(true); }}
-                    className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm hover:bg-red-500/10 text-red-400 transition-colors text-left"
-                  >
-                    <Trash2 size={13} /> Delete
-                  </button>
-                ) : (
-                  <div className="px-3 py-2">
-                    <p className="text-xs text-muted-foreground mb-2">Are you sure?</p>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onDelete(conv.id);
-                          setShowMenu(false);
-                        }}
-                        className="flex-1 text-xs bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg py-1.5 transition-colors"
-                      >
-                        Delete
-                      </button>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); setShowDeleteConfirm(false); }}
-                        className="flex-1 text-xs hover:bg-white/10 rounded-lg py-1.5 transition-colors"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-      )}
-    </div>
+      </ContextMenuTrigger>
+      
+      <ContextMenuContent className="w-48">
+        <ContextMenuItem onClick={(e) => { e.stopPropagation(); startEdit(); }}>
+          <Pencil size={14} className="mr-2" /> Rename
+        </ContextMenuItem>
+        <ContextMenuItem onClick={(e) => { e.stopPropagation(); onPin(conv.id); }}>
+          <Pin size={14} className="mr-2" /> {conv.is_pinned ? 'Unpin' : 'Pin'}
+        </ContextMenuItem>
+        <ContextMenuSeparator />
+        <ContextMenuItem 
+          onClick={(e) => { e.stopPropagation(); onDelete(conv.id); }}
+          className="text-red-400 focus:text-red-300 focus:bg-red-400/10"
+        >
+          <Trash2 size={14} className="mr-2" /> Delete
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
   );
 }
 
