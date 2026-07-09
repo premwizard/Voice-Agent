@@ -12,7 +12,7 @@ import { useVoiceStore } from '../stores/voiceStore';
 import { useConversationStore } from '../stores/conversationStore';
 import type { ChatMessage } from '../stores/voiceStore';
 
-const WS_BASE = process.env.NEXT_PUBLIC_WS_URL ?? 'ws://localhost:8000';
+const WS_BASE = process.env.NEXT_PUBLIC_WS_URL ?? 'ws://127.0.0.1:8000';
 
 class WebSocketService {
   private ws: WebSocket | null = null;
