@@ -45,13 +45,25 @@ export default function VoiceAgent() {
     stream,
     silenceDelay: 1500, // 1.5 seconds of silence = end of speech
     onSpeechStart: handleSpeechStart,
-    onSpeechEnd: handleSpeechEnd
   });
 
+  const userPartialTranscript = useVoiceStore((state) => state.userPartialTranscript);
+  const speechTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+
   useEffect(() => {
-    wsService.connect();
+    if (userPartialTranscript) {
+      if (speechTimeoutRef.current) clearTimeout(speechTimeoutRef.current);
+      speechTimeoutRef.current = setTimeout(() => {
+        handleSpeechEnd();
+      }, 1500); // 1.5 seconds of no new words = speech ended
+    }
     return () => {
-      wsService.disconnect();
+      if (speechTimeoutRef.current) clearTimeout(speechTimeoutRef.current);
+    };
+  }, [userPartialTranscript, handleSpeechEnd]);
+
+  useEffect(() => {
+    return () => {
       stopMicrophone();
       stopRecognition();
     };

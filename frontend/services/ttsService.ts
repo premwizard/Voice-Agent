@@ -23,7 +23,10 @@ class TTSService {
 
   public speak(text: string) {
     if (!text.trim()) return;
-    this.queue.push(text);
+    // Remove markdown formatting like asterisks that sound unnatural
+    const cleanText = text.replace(/[*_~`#]/g, '').trim();
+    if (!cleanText) return;
+    this.queue.push(cleanText);
     this.processQueue();
   }
 

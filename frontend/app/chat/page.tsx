@@ -4,10 +4,18 @@ import React, { useEffect } from 'react';
 import VoiceAgent from '@/components/VoiceAgent';
 import ChatInterface from '@/components/ChatInterface';
 import { useVoiceStore } from '@/stores/voiceStore';
+import { wsService } from '@/services/websocket';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export default function ChatPage() {
   const store = useVoiceStore();
+
+  useEffect(() => {
+    wsService.connect();
+    return () => {
+      wsService.disconnect();
+    };
+  }, []);
 
   return (
     <div className="w-full h-full max-w-6xl mx-auto flex flex-col lg:flex-row gap-6 relative">

@@ -7,6 +7,9 @@ export function useMicrophone() {
 
   const startMicrophone = useCallback(async () => {
     try {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop());
+      }
       const mediaStream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
