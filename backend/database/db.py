@@ -216,40 +216,93 @@ CREATE TABLE IF NOT EXISTS feedback (
 );
 """
 
-
-async def get_db() -> aiosqlite.Connection:
-    """Open a new database connection. Use as: async with aiosqlite.connect(_DB_PATH) as conn."""
-    conn = await aiosqlite.connect(_DB_PATH)
-    conn.row_factory = aiosqlite.Row
-    return conn
-
-
+import asyncpg
+import aiosqlite
+import logging
+import re
+from typing import Any, List, Optional
 from contextlib import asynccontextmanager
+from config.settings import settings
 
+logger = logging.getLogger(__name__)
+
+def _convert_sqlite_to_postgres(query: str) -> str:
+    # Converts ? placeholders to $1, $2, etc.
+    parts = query.split('?')
+    if len(parts) == 1:
+        return query
+    res = parts[0]
+    for i, part in enumerate(parts[1:], 1):
+        res += f"${i}{part}"
+    return res
+
+class ConnectionWrapper:
+    def __init__(self, conn, is_postgres: bool):
+        self._conn = conn
+        self.is_postgres = is_postgres
+
+    async def execute(self, query: str, args: tuple = ()) -> Any:
+        if self.is_postgres:
+            pg_query = _convert_sqlite_to_postgres(query)
+            if query.strip().upper().startswith("SELECT"):
+                # asyncpg doesn't return cursor from execute
+                pass
+            else:
+                return await self._conn.execute(pg_query, *args)
+        else:
+            return await self._conn.execute(query, args)
+
+    async def fetchall(self, query: str, args: tuple = ()) -> List[dict]:
+        if self.is_postgres:
+            pg_query = _convert_sqlite_to_postgres(query)
+            records = await self._conn.fetch(pg_query, *args)
+            return [dict(r) for r in records]
+        else:
+            cursor = await self._conn.execute(query, args)
+            rows = await cursor.fetchall()
+            return [dict(r) for r in rows]
+
+    async def fetchone(self, query: str, args: tuple = ()) -> Optional[dict]:
+        if self.is_postgres:
+            pg_query = _convert_sqlite_to_postgres(query)
+            record = await self._conn.fetchrow(pg_query, *args)
+            return dict(record) if record else None
+        else:
+            cursor = await self._conn.execute(query, args)
+            row = await cursor.fetchone()
+            return dict(row) if row else None
+
+    async def commit(self):
+        if not self.is_postgres:
+            await self._conn.commit()
 
 @asynccontextmanager
 async def db_connection():
-    """
-    Async context manager for database connections.
-
-    Usage:
-        async with db_connection() as conn:
-            await conn.execute(...)
-            await conn.commit()
-    """
-    conn = await aiosqlite.connect(_DB_PATH)
-    conn.row_factory = aiosqlite.Row
-    try:
-        yield conn
-    finally:
-        await conn.close()
-
+    url = settings.database_url
+    if url.startswith("postgres"):
+        conn = await asyncpg.connect(url)
+        try:
+            yield ConnectionWrapper(conn, is_postgres=True)
+        finally:
+            await conn.close()
+    else:
+        path = url.replace("sqlite:///", "")
+        conn = await aiosqlite.connect(path)
+        conn.row_factory = aiosqlite.Row
+        try:
+            yield ConnectionWrapper(conn, is_postgres=False)
+        finally:
+            await conn.close()
 
 async def init_db() -> None:
-    """Run schema creation on application startup."""
-    logger.info(f"Initializing database at: {_DB_PATH}")
-    async with aiosqlite.connect(_DB_PATH) as conn:
-        conn.row_factory = aiosqlite.Row
-        await conn.executescript(CREATE_TABLES_SQL)
-        await conn.commit()
+    url = settings.database_url
+    logger.info(f"Initializing database at: {url}")
+    if url.startswith("postgres"):
+        logger.warning("Postgres schema initialization assumes Alembic in production. Skipping direct script exec.")
+    else:
+        path = url.replace("sqlite:///", "")
+        async with aiosqlite.connect(path) as conn:
+            conn.row_factory = aiosqlite.Row
+            await conn.executescript(CREATE_TABLES_SQL)
+            await conn.commit()
     logger.info("Database initialized successfully.")
