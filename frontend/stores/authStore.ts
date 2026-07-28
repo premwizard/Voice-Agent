@@ -27,6 +27,15 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: 'auth-storage',
+      partialize: (state) => ({
+        token: state.token,
+        user: state.user,
+      }),
+      merge: (persistedState: any, currentState) => ({
+        ...currentState,
+        token: persistedState?.token ?? currentState.token,
+        user: persistedState?.user ?? currentState.user,
+      }),
     }
   )
 );
