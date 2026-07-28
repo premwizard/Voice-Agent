@@ -31,23 +31,30 @@ async function request<T>(
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const res = await fetch(`${BASE_URL}${path}`, {
-    headers: { ...headers, ...options?.headers },
-    ...options,
-  });
+  try {
+    const res = await fetch(`${BASE_URL}${path}`, {
+      headers: { ...headers, ...options?.headers },
+      ...options,
+    });
 
-  if (!res.ok) {
-    let detail = `HTTP ${res.status}`;
-    try {
-      const body = await res.json();
-      detail = body.detail ?? detail;
-    } catch {
-      // ignore parse errors
+    if (!res.ok) {
+      let detail = `HTTP ${res.status}`;
+      try {
+        const body = await res.json();
+        detail = body.detail ?? detail;
+      } catch {
+        // ignore parse errors
+      }
+      throw new Error(detail);
     }
-    throw new Error(detail);
-  }
 
-  return res.json() as Promise<T>;
+    return res.json() as Promise<T>;
+  } catch (err: any) {
+    if (err.name === 'TypeError' && err.message.includes('fetch')) {
+      throw new Error(`Unable to connect to backend server at ${BASE_URL}. Ensure the backend service is running.`);
+    }
+    throw err;
+  }
 }
 
 // ------------------------------------------------------------------ //

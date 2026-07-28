@@ -60,10 +60,10 @@ export const useConversationStore = create<ConversationStore>()(
         set({ isLoading: true });
         try {
           const convs = await conversationService.list();
-          set({ conversations: convs, isLoading: false });
+          set({ conversations: Array.isArray(convs) ? convs : [], isLoading: false });
         } catch (err) {
-          console.error('[ConversationStore] Failed to load conversations:', err);
-          set({ isLoading: false });
+          console.warn('[ConversationStore] Could not load conversations from backend:', err);
+          set({ conversations: [], isLoading: false });
         }
       },
 

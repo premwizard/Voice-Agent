@@ -294,6 +294,8 @@ async def db_connection():
         finally:
             await conn.close()
 
+get_db = db_connection
+
 async def init_db() -> None:
     url = settings.database_url
     logger.info(f"Initializing database at: {url}")
