@@ -1,6 +1,7 @@
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
+# Trigger uvicorn reloader to load updated site-packages (openai 2.49.0)
 
 from ws_server.manager import manager
 from config.settings import settings

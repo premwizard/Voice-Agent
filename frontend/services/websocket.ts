@@ -43,12 +43,15 @@ class WebSocketService {
 
     const mode = useVoiceStore.getState().activeMode;
     const token = useAuthStore.getState().token;
-    const params = new URLSearchParams({ mode });
+
+    if (!token) {
+      console.warn('[WS] Connection skipped: No authentication token found.');
+      return;
+    }
+
+    const params = new URLSearchParams({ mode, token });
     if (conversationId) {
       params.set('conversation_id', conversationId);
-    }
-    if (token) {
-      params.set('token', token);
     }
     const url = `${WS_BASE}/ws?${params.toString()}`;
 
@@ -65,18 +68,18 @@ class WebSocketService {
         this.handleMessage(event.data);
       };
 
-      this.ws.onclose = () => {
-        console.log('[WS] Disconnected');
+      this.ws.onclose = (event) => {
+        console.log('[WS] Disconnected', event.code, event.reason);
         useVoiceStore.getState().setIsConnected(false);
-        if (!this.intentionalDisconnect) {
+        if (!this.intentionalDisconnect && event.code !== 1008) {
           this.attemptReconnect();
         }
       };
 
       this.ws.onerror = () => {
         if (!this.intentionalDisconnect) {
-          console.error(
-            '[WS] Error: Could not connect to backend. Make sure the backend is running on port 8000.',
+          console.warn(
+            '[WS] Connection error: WebSocket failed to connect to backend on port 8000.',
           );
         }
       };
@@ -229,7 +232,19 @@ class WebSocketService {
     }
   }
 
-  sendMessage(type: string, content?: string, metadata?: Record<string, unknown>) {
+  async sendMessage(type: string, content?: string, metadata?: Record<string, unknown>): Promise<boolean> {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      console.warn('[WS] Socket not open. Attempting connection before sending message...');
+      const conversationId = useVoiceStore.getState().conversationId || useConversationStore.getState().activeConversationId;
+      this.connect(conversationId);
+      
+      let waited = 0;
+      while ((!this.ws || this.ws.readyState === WebSocket.CONNECTING) && waited < 3000) {
+        await new Promise((res) => setTimeout(res, 100));
+        waited += 100;
+      }
+    }
+
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       const payload: Record<string, unknown> = {
         type,
@@ -241,8 +256,14 @@ class WebSocketService {
       }
       console.log('[WS] Sending:', type, payload);
       this.ws.send(JSON.stringify(payload));
+      return true;
     } else {
-      console.error('[WS] Cannot send — WebSocket is not open');
+      console.error('[WS] Cannot send — WebSocket connection is not open.');
+      useVoiceStore.getState().setSystemNotification(
+        'Unable to connect to Voice Agent backend. Please verify backend is running on port 8000.',
+      );
+      useVoiceStore.getState().setStatus('idle');
+      return false;
     }
   }
 
