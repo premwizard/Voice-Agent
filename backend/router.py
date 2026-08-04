@@ -1,12 +1,15 @@
 # ==============================================================================
 # FILE: router.py
 # WHAT THIS FILE IS: API Router Module for HTTP Endpoints and WebSockets.
-# WHY IT IS USED: Contains all endpoint definitions (health check, config, and 
-#                 real-time AI WebSocket streaming chat) grouped cleanly under an APIRouter.
+# WHY IT IS USED: Contains all endpoint definitions (health check, config, 
+#                 REST AI chat, and real-time AI WebSocket streaming chat) 
+#                 grouped cleanly under an APIRouter.
 # ==============================================================================
 
 # Import APIRouter for grouping endpoints and WebSocketDisconnect for catching closed sockets
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+# Import BaseModel for JSON request body validation
+from pydantic import BaseModel
 # Import settings object to access configuration variables like ENVIRONMENT and AI_PROVIDER
 from config import settings
 # Import global websocket manager instance to manage socket connections
@@ -16,6 +19,10 @@ from llm_service import llm_service
 
 # Create an APIRouter instance with a prefix '/api/v1' for API routes
 router = APIRouter(prefix="/api/v1", tags=["system"])
+
+# Define a Pydantic model for REST chat requests
+class ChatRequest(BaseModel):
+    prompt: str
 
 # Define a GET route for checking server health status
 @router.get("/health")
@@ -34,6 +41,25 @@ def get_public_config():
     return {
         "ai_provider": settings.AI_PROVIDER,
         "environment": settings.ENVIRONMENT
+    }
+
+# Define a POST REST endpoint for testing AI response via standard HTTP curl
+@router.post("/chat")
+async def rest_chat(request: ChatRequest):
+    """
+    HTTP POST REST endpoint to test AI response directly using standard curl requests.
+    """
+    response_tokens = []
+    # Collect streamed tokens from LLM service into a complete response string
+    async for token_chunk in llm_service.stream_response(request.prompt):
+        response_tokens.append(token_chunk)
+    
+    full_response = "".join(response_tokens)
+    return {
+        "prompt": request.prompt,
+        "ai_provider": settings.AI_PROVIDER,
+        "model": settings.OPENROUTER_MODEL,
+        "response": full_response
     }
 
 # Define a WebSocket endpoint for real-time bi-directional streaming communication with AI

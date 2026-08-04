@@ -18,7 +18,7 @@ export interface HealthStatus {
 /**
  * Fetches server health status from FastAPI endpoint GET /api/v1/health
  */
-export async function fetchServerHealth(): Promise<HealthStatus> {
+export async function fetchServerHealth(): Promise<HealthStatus | null> {
   try {
     // Send asynchronous HTTP GET request to FastAPI backend endpoint
     const response = await fetch(`${BACKEND_URL}/api/v1/health`, {
@@ -32,15 +32,16 @@ export async function fetchServerHealth(): Promise<HealthStatus> {
 
     // Check if response HTTP status code is OK (200)
     if (!response.ok) {
-      throw new Error(`Server error: ${response.statusText}`);
+      console.warn(`Server status check returned status: ${response.status}`);
+      return null;
     }
 
     // Parse and return JSON response body typed as HealthStatus
     const data: HealthStatus = await response.json();
     return data;
   } catch (error) {
-    // Log error to console and rethrow meaningful error message
-    console.error("Failed to fetch server health:", error);
-    throw error;
+    // Gracefully handle backend offline case without unhandled console error crashes
+    console.warn("Backend server on port 8000 is currently offline or unreachable.");
+    return null;
   }
 }
