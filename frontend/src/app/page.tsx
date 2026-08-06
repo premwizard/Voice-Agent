@@ -58,10 +58,11 @@ export default function Home() {
           content: finalText,
           timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
         };
-        setMessages((prev) => [...prev, userMsg]);
 
-        // Send over WebSocket
-        sendMessage(finalText);
+        setMessages((prev) => {
+          sendMessage(finalText, prev);
+          return [...prev, userMsg];
+        });
         setInputPrompt("");
       }
     },
@@ -75,6 +76,7 @@ export default function Home() {
     isSpeaking,
     isSupported,
     speechStatus,
+    audioLevel,
     startListening,
     stopListening,
     processStreamingTTS,
@@ -133,17 +135,18 @@ export default function Home() {
 
     const userText = inputPrompt.trim();
 
-    // Push to timeline
+    // Push to timeline and send prompt with history
     const userMsg: MessageItem = {
       id: Date.now().toString(),
       role: "user",
       content: userText,
       timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
     };
+
+    sendMessage(userText, messages);
     setMessages((prev) => [...prev, userMsg]);
 
     resetTTSBuffer();
-    sendMessage(userText);
     setInputPrompt("");
   };
 
@@ -158,9 +161,9 @@ export default function Home() {
       content: promptText,
       timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
     };
+
+    sendMessage(promptText, messages);
     setMessages((prev) => [...prev, userMsg]);
-    
-    sendMessage(promptText);
     setInputPrompt("");
   };
 
@@ -240,6 +243,7 @@ export default function Home() {
             isActive={isListening || isSpeaking || isStreaming}
             mode={isListening ? "user" : isSpeaking || isStreaming ? "ai" : "idle"}
             size={160}
+            audioLevel={audioLevel}
           />
           
           {/* Status Badge Pill floating below Orb */}
@@ -282,6 +286,7 @@ export default function Home() {
           <AudioVisualizer
             isActive={isListening || isSpeaking || isStreaming}
             mode={isListening ? "user" : "ai"}
+            audioLevel={audioLevel}
           />
 
           {!isSupported && (

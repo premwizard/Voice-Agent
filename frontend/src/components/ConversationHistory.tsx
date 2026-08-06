@@ -40,7 +40,7 @@ export default function ConversationHistory({
 
   return (
     <div className="w-full space-y-4 max-h-[380px] overflow-y-auto pr-1">
-      {messages.length === 0 && !currentStream && (
+      {messages.length === 0 && (!isStreaming || !currentStream) && (
         <div className="glass-panel rounded-2xl p-8 text-center border border-slate-800/80">
           <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center mx-auto mb-3">
             <Sparkles className="w-6 h-6 animate-pulse" />
@@ -129,7 +129,7 @@ export default function ConversationHistory({
       })}
 
       {/* Real-time Streaming Message Card */}
-      {currentStream && (
+      {isStreaming && currentStream && (
         <div className="flex gap-3 justify-start animate-fadeIn">
           <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-indigo-600 to-purple-600 flex items-center justify-center text-white shrink-0 shadow-md shadow-indigo-500/20 mt-1">
             <Bot className="w-4 h-4 animate-spin-slow" />

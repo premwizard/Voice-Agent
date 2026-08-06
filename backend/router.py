@@ -62,12 +62,14 @@ async def rest_chat(request: ChatRequest):
         "response": full_response
     }
 
+import json
+
 # Define a WebSocket endpoint for real-time bi-directional streaming communication with AI
 @router.websocket("/ws/stream")
 async def websocket_chat_endpoint(websocket: WebSocket):
     """
     Real-time WebSocket endpoint that accepts client connections, listens for 
-    incoming text prompts, and streams AI generated text tokens back in real time.
+    incoming text prompts or JSON payloads, and streams AI generated text tokens back in real time.
     """
     # Step 1: Accept incoming socket connection and register with connection manager
     await manager.connect(websocket)
@@ -78,14 +80,27 @@ async def websocket_chat_endpoint(websocket: WebSocket):
         
         # Step 3: Enter an infinite loop to receive and process incoming prompts
         while True:
-            # Wait asynchronously for the client to send a text prompt
-            prompt = await websocket.receive_text()
+            # Wait asynchronously for the client to send a text prompt or JSON string
+            raw_data = await websocket.receive_text()
+            prompt = raw_data
+            history = None
+
+            # Parse JSON if payload contains structured prompt and conversation history
+            try:
+                data = json.loads(raw_data)
+                if isinstance(data, dict):
+                    prompt = data.get("prompt", raw_data)
+                    history = data.get("history", None)
+            except Exception:
+                pass
             
-            # Step 4: Stream response tokens directly from LLM service token-by-token
-            async for token_chunk in llm_service.stream_response(prompt):
+            # Step 4: Stream response tokens directly from LLM service token-by-token with history
+            async for token_chunk in llm_service.stream_response(prompt, history):
                 # Transmit each AI token chunk over the WebSocket to the client instantly
                 await manager.send_personal_message(token_chunk, websocket)
             
+            # Step 5: Send end marker to signal stream completion
+            await manager.send_personal_message("[END_OF_STREAM]", websocket)
     except WebSocketDisconnect:
         # Step 5: Clean up and unregister socket connection when client disconnects
         manager.disconnect(websocket)

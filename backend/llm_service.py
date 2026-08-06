@@ -5,10 +5,9 @@
 #                 managing streaming token responses token-by-token over WebSockets.
 # ==============================================================================
 
-# Import AsyncGenerator to type hint streaming token functions
-from typing import AsyncGenerator
-# Import OpenAI client to interact with OpenRouter's OpenAI-compatible endpoint
-from openai import OpenAI
+from typing import AsyncGenerator, List, Dict, Union
+# Import AsyncOpenAI client to interact non-blocking with OpenRouter's API
+from openai import AsyncOpenAI
 # Import Google GenAI SDK client
 from google import genai
 # Import settings object to fetch configured API keys and model options
@@ -26,9 +25,9 @@ class LLMService:
         # Gemini setup
         self.gemini_key = settings.GEMINI_API_KEY
 
-        # Initialize OpenRouter client if OpenRouter provider selected
+        # Initialize AsyncOpenAI client if OpenRouter provider selected
         if self.provider == "openrouter" and self.openrouter_key and self.openrouter_key != "your_openrouter_api_key_here":
-            self.client = OpenAI(
+            self.client = AsyncOpenAI(
                 base_url="https://openrouter.ai/api/v1",
                 api_key=self.openrouter_key,
             )
@@ -39,26 +38,39 @@ class LLMService:
             # Set client to None if no valid API key is configured (enables mock fallback testing mode)
             self.client = None
 
-    async def stream_response(self, prompt: str) -> AsyncGenerator[str, None]:
+    async def stream_response(self, prompt: str, history: List[Dict[str, str]] = None) -> AsyncGenerator[str, None]:
         """
         Generates and streams response text chunks token-by-token asynchronously.
-        Calls OpenRouter API if active, otherwise falls back to Gemini or testing mode.
+        Supports multi-turn conversation memory history.
         """
-        # 1. OpenRouter Provider Branch
+        # Construct messages payload with system prompt, history, and current prompt
+        system_msg = {
+            "role": "system", 
+            "content": "You are a real-time AI Voice Assistant. Keep responses concise, conversational, and natural."
+        }
+        formatted_messages = [system_msg]
+
+        if history:
+            for msg in history:
+                role = msg.get("role")
+                content = msg.get("content")
+                if role in ["user", "assistant"] and content:
+                    formatted_messages.append({"role": role, "content": content})
+
+        formatted_messages.append({"role": "user", "content": prompt})
+
+        # 1. OpenRouter Provider Branch (Async / Non-blocking)
         if self.provider == "openrouter" and self.client:
             try:
-                # Call OpenRouter chat completions with streaming enabled
-                response = self.client.chat.completions.create(
+                # Call OpenRouter chat completions with async streaming enabled
+                response = await self.client.chat.completions.create(
                     model=self.openrouter_model,
-                    messages=[
-                        {"role": "system", "content": "You are a real-time AI Voice Assistant. Keep responses concise and natural."},
-                        {"role": "user", "content": prompt}
-                    ],
+                    messages=formatted_messages,
                     stream=True
                 )
                 
-                # Iterate through incoming streaming chunks from OpenRouter
-                for chunk in response:
+                # Iterate asynchronously through incoming streaming chunks from OpenRouter
+                async for chunk in response:
                     if chunk.choices and chunk.choices[0].delta.content:
                         # Yield token chunk live over WebSocket stream
                         yield chunk.choices[0].delta.content

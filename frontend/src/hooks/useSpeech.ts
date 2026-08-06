@@ -28,6 +28,8 @@ export function useSpeech(onSpeechEnd?: (finalText: string) => void) {
   const [isSupported, setIsSupported] = useState<boolean>(true);
   // Detailed status message string for UI diagnostics
   const [speechStatus, setSpeechStatus] = useState<string>("Click microphone to speak");
+  // State tracking live audio input volume level (0 to 1) for visualizers
+  const [audioLevel, setAudioLevel] = useState<number>(0);
 
   // Ref storing SpeechRecognition instance across renders
   const recognitionRef = useRef<any>(null);
@@ -39,6 +41,28 @@ export function useSpeech(onSpeechEnd?: (finalText: string) => void) {
   const spokenIndexRef = useRef<number>(0);
   // Ref tracking silence timer to auto-send prompt after pause in speech
   const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Audio Context & Analyser refs for real microphone frequency sampling
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const animFrameRef = useRef<number | null>(null);
+
+  // Helper to cleanup audio nodes and microphone stream
+  const cleanupAudioAnalyser = useCallback(() => {
+    if (animFrameRef.current) {
+      cancelAnimationFrame(animFrameRef.current);
+      animFrameRef.current = null;
+    }
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach((track) => track.stop());
+      mediaStreamRef.current = null;
+    }
+    if (audioCtxRef.current && audioCtxRef.current.state !== "closed") {
+      audioCtxRef.current.close().catch(() => {});
+      audioCtxRef.current = null;
+    }
+    setAudioLevel(0);
+  }, []);
 
   // Sync refs
   useEffect(() => {
@@ -86,11 +110,12 @@ export function useSpeech(onSpeechEnd?: (finalText: string) => void) {
         console.warn("Failed to stop recognition:", err);
       }
     }
+    cleanupAudioAnalyser();
     setIsListening(false);
     autoSubmitTranscript();
-  }, [autoSubmitTranscript]);
+  }, [autoSubmitTranscript, cleanupAudioAnalyser]);
 
-  // Function to start microphone listening with auto-silence detection
+  // Function to start microphone listening with Web Audio API frequency sampling
   const startListening = useCallback(() => {
     if (typeof window === "undefined") return;
 
@@ -115,6 +140,39 @@ export function useSpeech(onSpeechEnd?: (finalText: string) => void) {
       recognition.onstart = () => {
         setIsListening(true);
         setSpeechStatus("🎙️ Listening... Speak now!");
+
+        // Start Web Audio API Analyser for real volume visualization
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+          navigator.mediaDevices.getUserMedia({ audio: true })
+            .then((stream) => {
+              mediaStreamRef.current = stream;
+              const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+              if (!AudioCtx) return;
+              const audioCtx = new AudioCtx();
+              audioCtxRef.current = audioCtx;
+
+              const analyser = audioCtx.createAnalyser();
+              analyser.fftSize = 64;
+              const source = audioCtx.createMediaStreamSource(stream);
+              source.connect(analyser);
+
+              const dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+              const sampleVolume = () => {
+                analyser.getByteFrequencyData(dataArray);
+                let sum = 0;
+                for (let i = 0; i < dataArray.length; i++) {
+                  sum += dataArray[i];
+                }
+                const avg = sum / dataArray.length;
+                const normalized = Math.min(1, Math.max(0, avg / 100));
+                setAudioLevel(normalized);
+                animFrameRef.current = requestAnimationFrame(sampleVolume);
+              };
+              sampleVolume();
+            })
+            .catch((err) => console.warn("Microphone audio level sampling error:", err));
+        }
       };
 
       recognition.onresult = (event: any) => {
@@ -140,52 +198,65 @@ export function useSpeech(onSpeechEnd?: (finalText: string) => void) {
       };
 
       recognition.onend = () => {
+        cleanupAudioAnalyser();
         setIsListening(false);
         autoSubmitTranscript();
       };
 
       recognition.onerror = (event: any) => {
+        cleanupAudioAnalyser();
         setIsListening(false);
         if (event.error === "no-speech") {
           setSpeechStatus("No speech heard. Click mic to speak again.");
-        } else if (event.error === "not-allowed" || event.error === "permission-denied") {
-          setSpeechStatus("⚠️ Microphone blocked! Allow Mic in browser address bar.");
         } else {
-          setSpeechStatus(`Notice: ${event.error}`);
+          setSpeechStatus(`Speech error: ${event.error}`);
         }
       };
 
       recognitionRef.current = recognition;
-      setTranscript("");
-      transcriptRef.current = "";
       recognition.start();
     } catch (err) {
-      console.warn("Failed to start speech recognition:", err);
+      cleanupAudioAnalyser();
       setIsListening(false);
-      setSpeechStatus("Could not start microphone.");
+      setSpeechStatus("Failed to start speech recognition");
+      console.error("Speech recognition start error:", err);
     }
-  }, [autoSubmitTranscript, stopListening]);
+  }, [autoSubmitTranscript, stopListening, cleanupAudioAnalyser]);
 
-  // Function to queue and speak a single sentence chunk immediately
-  const speakUtteranceChunk = useCallback((textChunk: string) => {
-    if (typeof window !== "undefined" && "speechSynthesis" in window) {
-      const cleanChunk = textChunk.replace(/[*_#`~]/g, "").trim();
-      if (!cleanChunk) return;
+  // Clean up audio context on component unmount
+  useEffect(() => {
+    return () => {
+      cleanupAudioAnalyser();
+    };
+  }, [cleanupAudioAnalyser]);
 
-      const utterance = new SpeechSynthesisUtterance(cleanChunk);
-      utterance.rate = 1.05;
-      utterance.pitch = 1.0;
+  // Browser speech synthesis chunk player
+  const speakUtteranceChunk = useCallback((text: string) => {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+    if (!text.trim()) return;
 
-      utterance.onstart = () => setIsSpeaking(true);
-      utterance.onend = () => {
-        if (!window.speechSynthesis.speaking) {
-          setIsSpeaking(false);
-        }
-      };
-      utterance.onerror = () => setIsSpeaking(false);
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = 1.05;
+    utterance.pitch = 1.0;
 
-      window.speechSynthesis.speak(utterance);
-    }
+    utterance.onstart = () => {
+      setIsSpeaking(true);
+      setAudioLevel(0.6); // Simulate vibrant voice level pulse during TTS speech
+    };
+
+    utterance.onend = () => {
+      if (!window.speechSynthesis.speaking) {
+        setIsSpeaking(false);
+        setAudioLevel(0);
+      }
+    };
+    utterance.onerror = () => {
+      setIsSpeaking(false);
+      setAudioLevel(0);
+    };
+
+    window.speechSynthesis.speak(utterance);
   }, []);
 
   // Function to process incoming live streaming text and speak completed sentence chunks instantly
@@ -226,6 +297,7 @@ export function useSpeech(onSpeechEnd?: (finalText: string) => void) {
     if (typeof window !== "undefined" && "speechSynthesis" in window) {
       window.speechSynthesis.cancel();
     }
+    setAudioLevel(0);
   }, []);
 
   return {
@@ -234,6 +306,7 @@ export function useSpeech(onSpeechEnd?: (finalText: string) => void) {
     isSpeaking,
     isSupported,
     speechStatus,
+    audioLevel,
     startListening,
     stopListening,
     speakUtteranceChunk,

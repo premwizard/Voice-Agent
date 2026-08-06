@@ -13,9 +13,10 @@ interface CanvasAudioOrbProps {
   isActive: boolean;
   mode: "user" | "ai" | "idle";
   size?: number;
+  audioLevel?: number;
 }
 
-export default function CanvasAudioOrb({ isActive, mode, size = 180 }: CanvasAudioOrbProps) {
+export default function CanvasAudioOrb({ isActive, mode, size = 180, audioLevel = 0 }: CanvasAudioOrbProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   useEffect(() => {
@@ -43,7 +44,10 @@ export default function CanvasAudioOrb({ isActive, mode, size = 180 }: CanvasAud
 
       const centerX = canvas.width / 2;
       const centerY = canvas.height / 2;
-      const baseRadius = isActive ? 52 + Math.sin(tick * 3) * 6 : 42 + Math.sin(tick) * 2;
+      
+      // Calculate dynamic radius based on real audio level input
+      const levelBoost = audioLevel ? audioLevel * 30 : Math.sin(tick * 3) * 6;
+      const baseRadius = isActive ? 50 + levelBoost : 42 + Math.sin(tick) * 2;
 
       // Select colors based on current voice mode
       let primaryColor = "99, 102, 241"; // Indigo
@@ -79,8 +83,8 @@ export default function CanvasAudioOrb({ isActive, mode, size = 180 }: CanvasAud
         centerX, centerY, baseRadius * 0.2,
         centerX, centerY, baseRadius * 2
       );
-      glowGradient.addColorStop(0, `rgba(${glowColor}, ${isActive ? 0.45 : 0.15})`);
-      glowGradient.addColorStop(0.5, `rgba(${primaryColor}, ${isActive ? 0.25 : 0.08})`);
+      glowGradient.addColorStop(0, `rgba(${glowColor}, ${isActive ? 0.45 + (audioLevel * 0.3) : 0.15})`);
+      glowGradient.addColorStop(0.5, `rgba(${primaryColor}, ${isActive ? 0.25 + (audioLevel * 0.2) : 0.08})`);
       glowGradient.addColorStop(1, "rgba(0, 0, 0, 0)");
 
       ctx.beginPath();
@@ -93,8 +97,9 @@ export default function CanvasAudioOrb({ isActive, mode, size = 180 }: CanvasAud
       const points = 16;
       for (let i = 0; i <= points; i++) {
         const angle = (i / points) * Math.PI * 2;
+        const waveAmp = audioLevel ? 4 + audioLevel * 14 : 5;
         const wave = isActive
-          ? Math.sin(angle * 4 + tick * 4) * 5 + Math.cos(angle * 2 - tick * 3) * 4
+          ? Math.sin(angle * 4 + tick * 4) * waveAmp + Math.cos(angle * 2 - tick * 3) * (waveAmp * 0.8)
           : Math.sin(angle * 3 + tick) * 2;
         const r = baseRadius + wave;
         const x = centerX + Math.cos(angle) * r;
@@ -119,14 +124,14 @@ export default function CanvasAudioOrb({ isActive, mode, size = 180 }: CanvasAud
 
       ctx.fillStyle = coreGradient;
       ctx.shadowColor = `rgba(${primaryColor}, 0.8)`;
-      ctx.shadowBlur = isActive ? 25 : 12;
+      ctx.shadowBlur = isActive ? 25 + (audioLevel * 20) : 12;
       ctx.fill();
       ctx.shadowBlur = 0; // reset
 
       // Orbiting Spark Particles
       particles.forEach((p) => {
-        p.angle += p.speed * (isActive ? 2 : 1);
-        const distMultiplier = isActive ? 1.2 + Math.sin(tick * 2) * 0.2 : 1.0;
+        p.angle += p.speed * (isActive ? (2 + audioLevel * 3) : 1);
+        const distMultiplier = isActive ? 1.2 + Math.sin(tick * 2) * 0.2 + (audioLevel * 0.3) : 1.0;
         const px = centerX + Math.cos(p.angle) * (p.distance * distMultiplier);
         const py = centerY + Math.sin(p.angle) * (p.distance * distMultiplier);
 
@@ -144,7 +149,7 @@ export default function CanvasAudioOrb({ isActive, mode, size = 180 }: CanvasAud
     return () => {
       cancelAnimationFrame(animationFrameId);
     };
-  }, [isActive, mode]);
+  }, [isActive, mode, audioLevel]);
 
   return (
     <div className="relative flex items-center justify-center">

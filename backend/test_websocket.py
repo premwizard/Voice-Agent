@@ -34,6 +34,9 @@ async def test_ai_websocket():
             while True:
                 # Receive next token chunk with 3-second timeout for stream end
                 chunk = await asyncio.wait_for(websocket.recv(), timeout=3.0)
+                if chunk == "[END_OF_STREAM]":
+                    print("\n\n[STREAM COMPLETED]")
+                    break
                 # Print token chunk continuously on the same line to simulate real-time typing
                 print(chunk, end="", flush=True)
         except asyncio.TimeoutError:

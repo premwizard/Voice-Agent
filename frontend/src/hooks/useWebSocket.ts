@@ -14,6 +14,11 @@ import { useState, useEffect, useRef, useCallback } from "react";
 // Read WebSocket URI from environment variables with fallback
 const WS_URL = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8000/api/v1/ws/stream";
 
+export interface HistoryMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
 export function useWebSocket() {
   // State tracking boolean connection status
   const [isConnected, setIsConnected] = useState<boolean>(false);
@@ -28,6 +33,8 @@ export function useWebSocket() {
   const socketRef = useRef<WebSocket | null>(null);
   // Ref tracking reconnect timer
   const reconnectTimerRef = useRef<NodeJS.Timeout | null>(null);
+  // Ref tracking stream inactivity safeguard timer
+  const streamTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   // Ref tracking unmount status
   const isMountedRef = useRef<boolean>(true);
 
@@ -67,9 +74,35 @@ export function useWebSocket() {
         if (!isMountedRef.current) return;
         const incomingText: string = event.data;
 
+        // Ignore connection welcome message so it doesn't set isStreaming(true)
+        if (incomingText.startsWith("Connected to Voice Agent")) {
+          console.log("WebSocket system message:", incomingText);
+          return;
+        }
+
+        // Handle end-of-stream signal sent from FastAPI backend
+        if (incomingText === "[END_OF_STREAM]") {
+          if (streamTimeoutRef.current) {
+            clearTimeout(streamTimeoutRef.current);
+            streamTimeoutRef.current = null;
+          }
+          setIsStreaming(false);
+          return;
+        }
+
         // Update current streaming response accumulator
         setCurrentStream((prev) => prev + incomingText);
         setIsStreaming(true);
+
+        // Inactivity timeout safeguard in case stream ends without delimiter
+        if (streamTimeoutRef.current) {
+          clearTimeout(streamTimeoutRef.current);
+        }
+        streamTimeoutRef.current = setTimeout(() => {
+          if (isMountedRef.current) {
+            setIsStreaming(false);
+          }
+        }, 1500);
       };
 
       // Event listener when WebSocket closes
@@ -105,6 +138,10 @@ export function useWebSocket() {
       clearTimeout(reconnectTimerRef.current);
       reconnectTimerRef.current = null;
     }
+    if (streamTimeoutRef.current) {
+      clearTimeout(streamTimeoutRef.current);
+      streamTimeoutRef.current = null;
+    }
     if (socketRef.current) {
       // Unbind event listeners before closing to prevent StrictMode warning noise
       socketRef.current.onopen = null;
@@ -119,9 +156,13 @@ export function useWebSocket() {
     }
   }, []);
 
-  // Function to send a text prompt to FastAPI WebSocket server
-  const sendMessage = useCallback((prompt: string) => {
+  // Function to send a text prompt to FastAPI WebSocket server with optional conversation history
+  const sendMessage = useCallback((prompt: string, history?: HistoryMessage[]) => {
     const activeSocket = socketRef.current;
+    const payload = JSON.stringify({
+      prompt,
+      history: history ? history.map(h => ({ role: h.role, content: h.content })) : []
+    });
     
     if (activeSocket && activeSocket.readyState === WebSocket.OPEN) {
       // Clear previous stream accumulator before starting new prompt stream
@@ -130,7 +171,7 @@ export function useWebSocket() {
       // Push client prompt into messages history
       setMessages((prev) => [...prev, `User: ${prompt}`]);
       // Transmit prompt text over active WebSocket connection
-      activeSocket.send(prompt);
+      activeSocket.send(payload);
     } else {
       console.log("WebSocket connecting... Queuing prompt send.");
       // Retry sending in 400ms once socket transitions to OPEN state
@@ -139,7 +180,7 @@ export function useWebSocket() {
           setCurrentStream("");
           setIsStreaming(true);
           setMessages((prev) => [...prev, `User: ${prompt}`]);
-          socketRef.current.send(prompt);
+          socketRef.current.send(payload);
         }
       }, 400);
     }

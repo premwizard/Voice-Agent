@@ -10,9 +10,10 @@
 interface AudioVisualizerProps {
   isActive: boolean;
   mode: "user" | "ai";
+  audioLevel?: number;
 }
 
-export default function AudioVisualizer({ isActive, mode }: AudioVisualizerProps) {
+export default function AudioVisualizer({ isActive, mode, audioLevel = 0 }: AudioVisualizerProps) {
   const gradientClass = mode === "user" 
     ? "from-rose-500 via-amber-500 to-orange-400" 
     : "from-cyan-400 via-indigo-500 to-purple-500";
@@ -26,20 +27,24 @@ export default function AudioVisualizer({ isActive, mode }: AudioVisualizerProps
   return (
     <div className="flex items-center justify-center space-x-1.5 h-14 px-5 rounded-2xl glass-panel border border-slate-800/80 shadow-2xl">
       {bars.map((bar) => {
-        // Vary base heights for realistic equalizer feel
+        // Base bar heights
         const heights = [18, 32, 24, 42, 28, 38, 22, 34, 20, 28];
-        const heightVal = heights[bar - 1] || 24;
+        const baseHeight = heights[bar - 1] || 24;
+        
+        // Dynamically scale height by real audioLevel if provided
+        const dynamicMultiplier = audioLevel ? 0.4 + audioLevel * 1.2 : 1.0;
+        const heightVal = Math.min(46, Math.max(8, baseHeight * dynamicMultiplier));
 
         return (
           <span
             key={bar}
-            className={`w-1.5 rounded-full transition-all duration-300 bg-gradient-to-t ${gradientClass} ${
+            className={`w-1.5 rounded-full transition-all duration-150 bg-gradient-to-t ${gradientClass} ${
               isActive ? `animate-pulse ${glowShadow}` : "h-2 opacity-20"
             }`}
             style={{
               height: isActive ? `${heightVal}px` : "6px",
-              animationDelay: `${bar * 100}ms`,
-              animationDuration: `${450 + bar * 70}ms`,
+              animationDelay: `${bar * 80}ms`,
+              animationDuration: `${400 + bar * 60}ms`,
             }}
           />
         );
