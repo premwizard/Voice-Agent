@@ -85,17 +85,21 @@ async def websocket_chat_endpoint(websocket: WebSocket):
             prompt = raw_data
             history = None
 
-            # Parse JSON if payload contains structured prompt and conversation history
+            # Parse JSON if payload contains structured prompt, conversation history, model, or system_prompt
+            model = None
+            system_prompt = None
             try:
                 data = json.loads(raw_data)
                 if isinstance(data, dict):
                     prompt = data.get("prompt", raw_data)
                     history = data.get("history", None)
+                    model = data.get("model", None)
+                    system_prompt = data.get("system_prompt", None)
             except Exception:
                 pass
             
-            # Step 4: Stream response tokens directly from LLM service token-by-token with history
-            async for token_chunk in llm_service.stream_response(prompt, history):
+            # Step 4: Stream response tokens directly from LLM service token-by-token with history & custom model
+            async for token_chunk in llm_service.stream_response(prompt, history, model, system_prompt):
                 # Transmit each AI token chunk over the WebSocket to the client instantly
                 await manager.send_personal_message(token_chunk, websocket)
             

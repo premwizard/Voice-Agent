@@ -19,6 +19,11 @@ export interface HistoryMessage {
   content: string;
 }
 
+export interface SendOptions {
+  model?: string;
+  systemPrompt?: string;
+}
+
 export function useWebSocket() {
   // State tracking boolean connection status
   const [isConnected, setIsConnected] = useState<boolean>(false);
@@ -156,12 +161,14 @@ export function useWebSocket() {
     }
   }, []);
 
-  // Function to send a text prompt to FastAPI WebSocket server with optional conversation history
-  const sendMessage = useCallback((prompt: string, history?: HistoryMessage[]) => {
+  // Function to send a text prompt to FastAPI WebSocket server with optional conversation history & model settings
+  const sendMessage = useCallback((prompt: string, history?: HistoryMessage[], options?: SendOptions) => {
     const activeSocket = socketRef.current;
     const payload = JSON.stringify({
       prompt,
-      history: history ? history.map(h => ({ role: h.role, content: h.content })) : []
+      history: history ? history.map(h => ({ role: h.role, content: h.content })) : [],
+      model: options?.model,
+      system_prompt: options?.systemPrompt
     });
     
     if (activeSocket && activeSocket.readyState === WebSocket.OPEN) {

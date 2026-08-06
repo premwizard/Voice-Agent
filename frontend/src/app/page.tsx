@@ -31,6 +31,20 @@ import {
   AlertCircle
 } from "lucide-react";
 
+const AI_MODELS = [
+  { id: "meta-llama/llama-3.3-70b-instruct", name: "Llama 3.3 70B" },
+  { id: "deepseek/deepseek-chat", name: "DeepSeek V3" },
+  { id: "anthropic/claude-3.5-haiku", name: "Claude 3.5 Haiku" },
+  { id: "openai/gpt-4o-mini", name: "GPT-4o Mini" },
+];
+
+const PERSONALITIES = [
+  { id: "default", name: "🎙️ Natural", prompt: "You are a real-time AI Voice Assistant. Keep responses concise, conversational, and natural." },
+  { id: "concise", name: "⚡ Quick & Crisp", prompt: "You are a rapid voice assistant. Answer in 1-2 ultra-short sentences max." },
+  { id: "developer", name: "🧑‍💻 Tech Expert", prompt: "You are an expert software engineer voice assistant. Provide precise, technical answers." },
+  { id: "friendly", name: "🎭 Warm Companion", prompt: "You are a warm, supportive, and cheerful voice companion." },
+];
+
 export default function Home() {
   // Backend REST health status
   const [health, setHealth] = useState<HealthStatus | null>(null);
@@ -40,12 +54,19 @@ export default function Home() {
   const [messages, setMessages] = useState<MessageItem[]>([]);
   // Audio Mute toggle state
   const [isMuted, setIsMuted] = useState<boolean>(false);
+  // Dynamic AI Model selection
+  const [selectedModel, setSelectedModel] = useState<string>("meta-llama/llama-3.3-70b-instruct");
+  // Dynamic Voice Personality selection
+  const [selectedPersonality, setSelectedPersonality] = useState<string>("default");
 
   // WebSocket streaming hook
   const { isConnected, currentStream, isStreaming, sendMessage } = useWebSocket();
 
   // Track previous stream text to record finished assistant response turns
   const prevStreamRef = useRef<string>("");
+
+  // Get active system prompt text
+  const currentSysPrompt = PERSONALITIES.find((p) => p.id === selectedPersonality)?.prompt;
 
   // Callback to automatically send transcribed speech over WebSocket when user finishes speaking
   const handleSpeechEnd = useCallback(
@@ -60,13 +81,13 @@ export default function Home() {
         };
 
         setMessages((prev) => {
-          sendMessage(finalText, prev);
+          sendMessage(finalText, prev, { model: selectedModel, systemPrompt: currentSysPrompt });
           return [...prev, userMsg];
         });
         setInputPrompt("");
       }
     },
-    [sendMessage]
+    [sendMessage, selectedModel, currentSysPrompt]
   );
 
   // Speech STT & streaming TTS hook
@@ -143,7 +164,7 @@ export default function Home() {
       timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
     };
 
-    sendMessage(userText, messages);
+    sendMessage(userText, messages, { model: selectedModel, systemPrompt: currentSysPrompt });
     setMessages((prev) => [...prev, userMsg]);
 
     resetTTSBuffer();
@@ -162,7 +183,7 @@ export default function Home() {
       timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
     };
 
-    sendMessage(promptText, messages);
+    sendMessage(promptText, messages, { model: selectedModel, systemPrompt: currentSysPrompt });
     setMessages((prev) => [...prev, userMsg]);
     setInputPrompt("");
   };
@@ -233,6 +254,42 @@ export default function Home() {
           </div>
         </div>
       </header>
+
+      {/* Model & Persona Bar */}
+      <div className="w-full max-w-5xl mx-auto flex flex-wrap items-center justify-between gap-3 px-5 py-2.5 rounded-2xl glass-panel border border-slate-800/80 mt-3 z-10 text-xs">
+        <div className="flex items-center space-x-2">
+          <Cpu className="w-3.5 h-3.5 text-indigo-400" />
+          <span className="text-slate-400 font-medium">Model:</span>
+          <select
+            value={selectedModel}
+            onChange={(e) => setSelectedModel(e.target.value)}
+            className="bg-slate-900/90 border border-slate-800 rounded-xl px-3 py-1 text-indigo-200 focus:outline-none focus:border-indigo-500 font-mono text-[11px]"
+          >
+            {AI_MODELS.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="flex items-center space-x-1.5 overflow-x-auto">
+          <span className="text-slate-400 font-medium mr-1 hidden sm:inline">Persona:</span>
+          {PERSONALITIES.map((p) => (
+            <button
+              key={p.id}
+              onClick={() => setSelectedPersonality(p.id)}
+              className={`px-3 py-1 rounded-xl transition text-[11px] font-medium border ${
+                selectedPersonality === p.id
+                  ? "bg-indigo-600/30 border-indigo-500/80 text-indigo-200 shadow-md shadow-indigo-500/10"
+                  : "bg-slate-900/60 border-slate-800 text-slate-400 hover:text-slate-200"
+              }`}
+            >
+              {p.name}
+            </button>
+          ))}
+        </div>
+      </div>
 
       {/* Main Conversation Center Container */}
       <div className="w-full max-w-4xl mx-auto my-auto py-6 space-y-6 z-10">

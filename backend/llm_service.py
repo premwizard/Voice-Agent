@@ -38,15 +38,24 @@ class LLMService:
             # Set client to None if no valid API key is configured (enables mock fallback testing mode)
             self.client = None
 
-    async def stream_response(self, prompt: str, history: List[Dict[str, str]] = None) -> AsyncGenerator[str, None]:
+    async def stream_response(
+        self, 
+        prompt: str, 
+        history: List[Dict[str, str]] = None,
+        model: str = None,
+        system_prompt: str = None
+    ) -> AsyncGenerator[str, None]:
         """
         Generates and streams response text chunks token-by-token asynchronously.
-        Supports multi-turn conversation memory history.
+        Supports multi-turn conversation memory history and dynamic model/personality selection.
         """
+        active_model = model or self.openrouter_model
+        active_sys_prompt = system_prompt or "You are a real-time AI Voice Assistant. Keep responses concise, conversational, and natural."
+
         # Construct messages payload with system prompt, history, and current prompt
         system_msg = {
             "role": "system", 
-            "content": "You are a real-time AI Voice Assistant. Keep responses concise, conversational, and natural."
+            "content": active_sys_prompt
         }
         formatted_messages = [system_msg]
 
@@ -64,7 +73,7 @@ class LLMService:
             try:
                 # Call OpenRouter chat completions with async streaming enabled
                 response = await self.client.chat.completions.create(
-                    model=self.openrouter_model,
+                    model=active_model,
                     messages=formatted_messages,
                     stream=True
                 )
