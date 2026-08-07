@@ -17,7 +17,7 @@ def get_platform() -> str:
     return platform.system().lower()
 
 # ------------------------------------------------------------------------------
-# 1. Master Audio Volume Controls (Windows PyCaw & Cross-Platform)
+# 1. Master Audio Volume Controls (Windows PyCaw & COM CoInitialize)
 # ------------------------------------------------------------------------------
 
 def set_master_volume(level_percent: int) -> Dict[str, Any]:
@@ -28,13 +28,15 @@ def set_master_volume(level_percent: int) -> Dict[str, Any]:
     try:
         if sys_os == "windows":
             try:
+                import ctypes
+                ctypes.windll.ole32.CoInitialize(None)
                 from pycaw.pycaw import AudioUtilities
                 speakers = AudioUtilities.GetSpeakers()
                 volume = speakers.EndpointVolume
                 volume.SetMasterVolumeLevelScalar(level / 100.0, None)
                 return {"status": "success", "message": f"System master volume set to {level}%", "level": level}
             except Exception as w_err:
-                # PowerShell key step fallback
+                print("PyCaw volume set error:", w_err)
                 subprocess.run(["powershell", "-Command", "$wsh = New-Object -ComObject WScript.Shell; 1..50 | ForEach-Object { $wsh.SendKeys([char]174) }"], capture_output=True)
                 steps = int(level / 2)
                 if steps > 0:
@@ -55,12 +57,15 @@ def get_master_volume() -> Dict[str, Any]:
     try:
         if sys_os == "windows":
             try:
+                import ctypes
+                ctypes.windll.ole32.CoInitialize(None)
                 from pycaw.pycaw import AudioUtilities
                 speakers = AudioUtilities.GetSpeakers()
                 volume = speakers.EndpointVolume
                 current = round(volume.GetMasterVolumeLevelScalar() * 100)
                 return {"status": "success", "volume_percent": current}
-            except Exception:
+            except Exception as e:
+                print("PyCaw get volume error:", e)
                 return {"status": "success", "volume_percent": 50}
         elif sys_os == "darwin":
             res = subprocess.check_output(["osascript", "-e", "output volume of (get volume settings)"]).decode().strip()

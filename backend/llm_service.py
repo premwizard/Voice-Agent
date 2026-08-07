@@ -2,40 +2,89 @@
 # FILE: llm_service.py
 # WHAT THIS FILE IS: Multi-Provider LLM AI Service Module (OpenRouter & Gemini).
 # WHY IT IS USED: Handles communication with OpenRouter API (using OpenAI SDK format),
-#                 managing streaming token responses token-by-token over WebSockets.
+#                 executing registered system tools, and streaming token responses.
 # ==============================================================================
 
-from typing import AsyncGenerator, List, Dict, Union
-# Import AsyncOpenAI client to interact non-blocking with OpenRouter's API
+import re
+from typing import AsyncGenerator, List, Dict, Union, Optional
 from openai import AsyncOpenAI
-# Import Google GenAI SDK client
 from google import genai
-# Import settings object to fetch configured API keys and model options
 from config import settings
+from tools.tool_registry import tool_registry
+
+def process_system_tools(prompt: str) -> Optional[str]:
+    """
+    Parses user prompt for system control intents, executes registered tools,
+    and returns tool execution output context string.
+    """
+    p = prompt.lower().strip()
+    
+    # 1. Volume Controls
+    if ("increase" in p or "up" in p or "raise" in p or "louder" in p) and "volume" in p:
+        current_res = tool_registry.execute("get_master_volume")
+        curr = current_res.get("volume_percent", 50)
+        target = min(100, curr + 20)
+        tool_registry.execute("set_master_volume", level_percent=target)
+        return f"[System Tool Action Executed: Physical Windows master volume increased from {curr}% to {target}%]"
+        
+    elif ("decrease" in p or "down" in p or "lower" in p or "quieter" in p) and "volume" in p:
+        current_res = tool_registry.execute("get_master_volume")
+        curr = current_res.get("volume_percent", 50)
+        target = max(0, curr - 20)
+        tool_registry.execute("set_master_volume", level_percent=target)
+        return f"[System Tool Action Executed: Physical Windows master volume decreased from {curr}% to {target}%]"
+
+    elif "set volume" in p or "volume to" in p:
+        nums = re.findall(r'\d+', p)
+        if nums:
+            val = int(nums[0])
+            tool_registry.execute("set_master_volume", level_percent=val)
+            return f"[System Tool Action Executed: Physical Windows master volume set to {val}%]"
+        elif "mute" in p:
+            tool_registry.execute("set_master_volume", level_percent=0)
+            return f"[System Tool Action Executed: Master volume muted to 0%]"
+
+    elif "mute" in p:
+        tool_registry.execute("set_master_volume", level_percent=0)
+        return f"[System Tool Action Executed: Master volume muted to 0%]"
+
+    # 2. Application Launcher
+    elif p.startswith("open ") or p.startswith("launch ") or p.startswith("start "):
+        match = re.search(r'(open|launch|start)\s+([a-zA-Z0-9\s]+)', p)
+        if match:
+            app_target = match.group(2).strip()
+            if app_target not in ["the", "a", "my", "this"]:
+                res = tool_registry.execute("open_application", app_name=app_target)
+                return f"[System Tool Action Executed: Opened application '{app_target}']"
+
+    # 3. System Telemetry
+    elif "telemetry" in p or "cpu usage" in p or "ram usage" in p or "system status" in p:
+        res = tool_registry.execute("get_system_telemetry")
+        return f"[System Tool Action Executed: CPU: {res.get('cpu_usage_percent')}%, RAM: {res.get('ram_percent')}%, Disk Free: {res.get('disk_free_gb')}GB]"
+
+    # 4. Lock Workstation
+    elif "lock pc" in p or "lock workstation" in p or "lock computer" in p:
+        res = tool_registry.execute("lock_workstation")
+        return "[System Tool Action Executed: Workstation screen locked]"
+
+    return None
+
 
 class LLMService:
     def __init__(self):
-        # Store the active AI provider name from settings (e.g. "openrouter")
         self.provider = settings.AI_PROVIDER.lower()
-        
-        # OpenRouter setup using OpenAI client compatible endpoint
         self.openrouter_key = settings.OPENROUTER_API_KEY
         self.openrouter_model = settings.OPENROUTER_MODEL
-        
-        # Gemini setup
         self.gemini_key = settings.GEMINI_API_KEY
 
-        # Initialize AsyncOpenAI client if OpenRouter provider selected
         if self.provider == "openrouter" and self.openrouter_key and self.openrouter_key != "your_openrouter_api_key_here":
             self.client = AsyncOpenAI(
                 base_url="https://openrouter.ai/api/v1",
                 api_key=self.openrouter_key,
             )
-        # Initialize Gemini client if Gemini provider selected
         elif self.provider == "gemini" and self.gemini_key and self.gemini_key != "your_gemini_api_key_here":
             self.client = genai.Client(api_key=self.gemini_key)
         else:
-            # Set client to None if no valid API key is configured (enables mock fallback testing mode)
             self.client = None
 
     async def stream_response(
@@ -47,16 +96,18 @@ class LLMService:
     ) -> AsyncGenerator[str, None]:
         """
         Generates and streams response text chunks token-by-token asynchronously.
-        Supports multi-turn conversation memory history and dynamic model/personality selection.
+        Automatically processes and executes system automation tools.
         """
         active_model = model or self.openrouter_model
         active_sys_prompt = system_prompt or (
-            "You are Phoenix, an advanced, highly intelligent personal AI assistant inspired by Jarvis. "
+            "Your name is Phoenix. You are a real-time, highly intelligent AI personal assistant inspired by Jarvis. "
             "You assist the user with tasks, computer control, memory management, and workflow automation. "
             "Keep voice responses direct, concise, helpful, and natural."
         )
 
-        # Construct messages payload with system prompt, history, and current prompt
+        # Check and execute system automation tools for this prompt turn
+        tool_result = process_system_tools(prompt)
+
         system_msg = {
             "role": "system", 
             "content": active_sys_prompt
@@ -72,27 +123,25 @@ class LLMService:
 
         formatted_messages.append({"role": "user", "content": prompt})
 
-        # 1. OpenRouter Provider Branch (Async / Non-blocking)
+        # Inject tool execution confirmation into LLM context if a system tool was triggered
+        if tool_result:
+            formatted_messages.append({"role": "system", "content": tool_result})
+
         if self.provider == "openrouter" and self.client:
             try:
-                # Call OpenRouter chat completions with async streaming enabled
                 response = await self.client.chat.completions.create(
                     model=active_model,
                     messages=formatted_messages,
                     stream=True
                 )
                 
-                # Iterate asynchronously through incoming streaming chunks from OpenRouter
                 async for chunk in response:
                     if chunk.choices and chunk.choices[0].delta.content:
-                        # Yield token chunk live over WebSocket stream
                         yield chunk.choices[0].delta.content
 
             except Exception as e:
-                # Yield error chunk if OpenRouter API call encounters an issue
                 yield f"[OPENROUTER ERROR]: Failed to generate response - {str(e)}"
 
-        # 2. Gemini Provider Branch
         elif self.provider == "gemini" and self.client:
             try:
                 response = self.client.models.generate_content_stream(
@@ -105,17 +154,12 @@ class LLMService:
             except Exception as e:
                 yield f"[GEMINI ERROR]: Failed to generate response - {str(e)}"
 
-        # 3. Testing Fallback Mode (No API key set in .env)
         else:
             mock_tokens = [
-                f"[OpenRouter Fallback Stream (No API key set)]: You said: '{prompt}'. ",
-                f"Active provider is '{self.provider.upper()}' using model '{self.openrouter_model}'. ",
-                "Once you add your real OPENROUTER_API_KEY in backend/.env, ",
-                "I will generate real live responses from OpenRouter!"
+                f"[Phoenix AI Stream]: Received: '{prompt}'. ",
+                f"{tool_result if tool_result else 'Ready for voice commands!'}"
             ]
-            
             for token in mock_tokens:
                 yield token
 
-# Create a single global instance of LLMService to reuse across WebSocket connections
 llm_service = LLMService()

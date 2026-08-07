@@ -93,10 +93,8 @@ export default function Home() {
           timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
         };
 
-        setMessages((prev) => {
-          sendMessage(finalText, prev, { model: selectedModel, systemPrompt: currentSysPrompt });
-          return [...prev, userMsg];
-        });
+        sendMessage(finalText, messages, { model: selectedModel, systemPrompt: currentSysPrompt });
+        setMessages((prev) => [...prev, userMsg]);
         setInputPrompt("");
       }
     },

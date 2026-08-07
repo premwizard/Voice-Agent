@@ -54,7 +54,7 @@ def get_system_telemetry() -> Dict[str, Any]:
     from backend.tools.system_control import get_detailed_telemetry
     return get_detailed_telemetry()
 
-@tool_registry.register("open_application", "Launches a desktop application by name (e.g. notepad, chrome, calc, code).")
+@tool_registry.register("open_application", "Launches a desktop application by name (e.g. notepad, chrome, calc, code, vs code).")
 def open_application(app_name: str) -> Dict[str, Any]:
     """Launches an application by name or executable command."""
     clean_name = app_name.lower().strip()
@@ -64,15 +64,27 @@ def open_application(app_name: str) -> Dict[str, Any]:
         "calc": "calc.exe",
         "cmd": "cmd.exe",
         "terminal": "cmd.exe",
-        "chrome": "start chrome",
+        "chrome": "chrome",
+        "google chrome": "chrome",
+        "browser": "chrome",
         "vscode": "code",
+        "vs code": "code",
+        "visual studio code": "code",
         "code": "code",
-        "spotify": "start spotify",
+        "spotify": "spotify",
         "explorer": "explorer.exe",
+        "file explorer": "explorer.exe",
     }
-    cmd = apps.get(clean_name, clean_name)
+    target = apps.get(clean_name, clean_name)
+    sys_os = platform.system().lower()
     try:
-        os.system(cmd)
+        if sys_os == "windows":
+            cmd_str = f'cmd /c start "" "{target}"' if not target.endswith(".exe") else target
+            os.system(cmd_str)
+        elif sys_os == "darwin":
+            os.system(f'open -a "{target}"')
+        else:
+            os.system(f'{target} &')
         return {"status": "success", "message": f"Opened '{app_name}' successfully."}
     except Exception as e:
         return {"status": "error", "message": f"Failed to open '{app_name}': {str(e)}"}
