@@ -2,12 +2,12 @@
 // FILE: src/hooks/useSpeech.ts
 // WHAT THIS FILE IS: Auto-Sending Hands-Free Voice Speech Recognition & Synthesis Hook.
 // WHY IT IS USED: Automatically detects silence (pause in speech) and immediately 
-//                 transmits recorded voice text over WebSockets without clicking "Send".
+//                 transmits recorded voice text over WebSockets without clicking "Send",
+//                 and automatically restarts mic listening when AI finishes speaking.
 // ==============================================================================
 
 "use client";
 
-// Import hooks from React
 import { useState, useEffect, useRef, useCallback } from "react";
 
 declare global {
@@ -18,38 +18,32 @@ declare global {
 }
 
 export function useSpeech(onSpeechEnd?: (finalText: string) => void) {
-  // State tracking whether microphone is actively listening
   const [isListening, setIsListening] = useState<boolean>(false);
-  // State storing transcribed speech text from user microphone
   const [transcript, setTranscript] = useState<string>("");
-  // State tracking whether browser speech synthesis is currently speaking
   const [isSpeaking, setIsSpeaking] = useState<boolean>(false);
-  // State tracking browser Web Speech API support
   const [isSupported, setIsSupported] = useState<boolean>(true);
-  // Detailed status message string for UI diagnostics
   const [speechStatus, setSpeechStatus] = useState<string>("Click microphone to speak");
-  // State tracking live audio input volume level (0 to 1) for visualizers
   const [audioLevel, setAudioLevel] = useState<number>(0);
-  // State tracking Wake Word detection mode ("Phoenix")
+  
+  // Hands-free continuous auto-listen mode (Default: TRUE)
+  const [isHandsFreeContinuous, setIsHandsFreeContinuous] = useState<boolean>(true);
   const [isWakeWordActive, setIsWakeWordActive] = useState<boolean>(true);
 
-  // Ref storing SpeechRecognition instance across renders
   const recognitionRef = useRef<any>(null);
-  // Ref storing live transcript string
   const transcriptRef = useRef<string>("");
-  // Ref tracking onSpeechEnd callback
   const onSpeechEndRef = useRef(onSpeechEnd);
-  // Ref tracking position of already spoken text buffer for real-time streaming TTS
   const spokenIndexRef = useRef<number>(0);
-  // Ref tracking silence timer to auto-send prompt after pause in speech
   const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const restartTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const isSpeakingRef = useRef<boolean>(false);
+  const isHandsFreeRef = useRef<boolean>(true);
 
-  // Audio Context & Analyser refs for real microphone frequency sampling
+  // Audio Context & Analyser refs for volume sampling
   const audioCtxRef = useRef<AudioContext | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const animFrameRef = useRef<number | null>(null);
 
-  // Helper to cleanup audio nodes and microphone stream
+  // Cleanup audio analyzer resources
   const cleanupAudioAnalyser = useCallback(() => {
     if (animFrameRef.current) {
       cancelAnimationFrame(animFrameRef.current);
@@ -75,19 +69,27 @@ export function useSpeech(onSpeechEnd?: (finalText: string) => void) {
     onSpeechEndRef.current = onSpeechEnd;
   }, [onSpeechEnd]);
 
-  // Helper function to submit final transcript automatically
+  useEffect(() => {
+    isSpeakingRef.current = isSpeaking;
+  }, [isSpeaking]);
+
+  useEffect(() => {
+    isHandsFreeRef.current = isHandsFreeContinuous;
+  }, [isHandsFreeContinuous]);
+
+  // Submit final transcript automatically
   const autoSubmitTranscript = useCallback(() => {
     const finalRecordedText = transcriptRef.current.trim();
     if (finalRecordedText && onSpeechEndRef.current) {
-      console.log("Auto-submitting spoken text without button click:", finalRecordedText);
-      setSpeechStatus(`Auto-Sent: "${finalRecordedText}"`);
+      console.log("Auto-submitting spoken text:", finalRecordedText);
+      setSpeechStatus(`Sent: "${finalRecordedText}"`);
       onSpeechEndRef.current(finalRecordedText);
       setTranscript("");
       transcriptRef.current = "";
     }
   }, []);
 
-  // Check browser support on initial mount
+  // Check browser support on mount
   useEffect(() => {
     if (typeof window !== "undefined") {
       const hasSupport = !!(window.SpeechRecognition || window.webkitSpeechRecognition);
@@ -98,11 +100,15 @@ export function useSpeech(onSpeechEnd?: (finalText: string) => void) {
     }
   }, []);
 
-  // Function to stop microphone listening and auto-send immediately
+  // Function to stop microphone listening
   const stopListening = useCallback(() => {
     if (silenceTimerRef.current) {
       clearTimeout(silenceTimerRef.current);
       silenceTimerRef.current = null;
+    }
+    if (restartTimerRef.current) {
+      clearTimeout(restartTimerRef.current);
+      restartTimerRef.current = null;
     }
 
     if (recognitionRef.current) {
@@ -117,15 +123,20 @@ export function useSpeech(onSpeechEnd?: (finalText: string) => void) {
     autoSubmitTranscript();
   }, [autoSubmitTranscript, cleanupAudioAnalyser]);
 
-  // Function to start microphone listening with Web Audio API frequency sampling
+  // Function to start microphone listening
   const startListening = useCallback(() => {
     if (typeof window === "undefined") return;
-
     const SpeechRecognitionClass = window.SpeechRecognition || window.webkitSpeechRecognition;
 
     if (!SpeechRecognitionClass) {
       setIsSupported(false);
-      setSpeechStatus("Web Speech API not supported in this browser");
+      setSpeechStatus("Web Speech API not supported");
+      return;
+    }
+
+    // Do not start mic if AI is currently speaking out loud
+    if (isSpeakingRef.current) {
+      console.log("AI is currently speaking, delaying mic start...");
       return;
     }
 
@@ -143,7 +154,6 @@ export function useSpeech(onSpeechEnd?: (finalText: string) => void) {
         setIsListening(true);
         setSpeechStatus("🎙️ Listening... Speak now!");
 
-        // Start Web Audio API Analyser for real volume visualization
         if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
           navigator.mediaDevices.getUserMedia({ audio: true })
             .then((stream) => {
@@ -173,7 +183,7 @@ export function useSpeech(onSpeechEnd?: (finalText: string) => void) {
               };
               sampleVolume();
             })
-            .catch((err) => console.warn("Microphone audio level sampling error:", err));
+            .catch((err) => console.warn("Microphone sampling error:", err));
         }
       };
 
@@ -183,12 +193,17 @@ export function useSpeech(onSpeechEnd?: (finalText: string) => void) {
           currentTranscript += event.results[i][0].transcript;
         }
 
-        // Wake word detection ("Phoenix" / "Hey Phoenix")
         const lowerText = currentTranscript.toLowerCase().trim();
         let cleanedPrompt = currentTranscript;
-        if (lowerText.startsWith("phoenix") || lowerText.startsWith("hey phoenix")) {
-          console.log("🔥 Wake Word 'Phoenix' triggered!");
-          cleanedPrompt = currentTranscript.replace(/^(hey\s+)?phoenix[,!]?\s*/i, "");
+
+        // Wake word handling ("Phoenix" or "Hey Phoenix")
+        if (lowerText === "phoenix" || lowerText === "hey phoenix" || lowerText === "hi phoenix") {
+          // Single name call -> Keep full prompt as "Hey Phoenix" so AI responds to its name!
+          cleanedPrompt = "Hey Phoenix";
+        } else if (lowerText.startsWith("phoenix") || lowerText.startsWith("hey phoenix") || lowerText.startsWith("hi phoenix")) {
+          // Command prefixed with name -> strip prefix for cleaner tool parsing
+          cleanedPrompt = currentTranscript.replace(/^(hey\s+|hi\s+)?phoenix[,!]?\s*/i, "");
+          if (!cleanedPrompt.trim()) cleanedPrompt = "Hey Phoenix";
         }
 
         setTranscript(cleanedPrompt);
@@ -196,17 +211,16 @@ export function useSpeech(onSpeechEnd?: (finalText: string) => void) {
           setSpeechStatus(`Speaking: "${cleanedPrompt}"`);
         }
 
-        // Reset silence timer on every new spoken word
         if (silenceTimerRef.current) {
           clearTimeout(silenceTimerRef.current);
         }
 
-        // AUTO-SEND TRIGGER: If user pauses for 1.2 seconds after speaking, automatically send prompt
+        // AUTO-SEND SILENCE DETECTOR: 1.0 second pause auto-transmits prompt
         if (cleanedPrompt.trim()) {
           silenceTimerRef.current = setTimeout(() => {
-            console.log("Pause in speech detected. Auto-sending prompt over WebSocket...");
+            console.log("Pause detected. Auto-submitting prompt...");
             stopListening();
-          }, 1200);
+          }, 1000);
         }
       };
 
@@ -214,13 +228,26 @@ export function useSpeech(onSpeechEnd?: (finalText: string) => void) {
         cleanupAudioAnalyser();
         setIsListening(false);
         autoSubmitTranscript();
+
+        // AUTO-RESTART MIC: If hands-free continuous mode is active and AI is not speaking out loud
+        if (isHandsFreeRef.current && !isSpeakingRef.current) {
+          if (restartTimerRef.current) clearTimeout(restartTimerRef.current);
+          restartTimerRef.current = setTimeout(() => {
+            console.log("Auto-restarting continuous mic listening...");
+            startListening();
+          }, 600);
+        }
       };
 
       recognition.onerror = (event: any) => {
         cleanupAudioAnalyser();
         setIsListening(false);
         if (event.error === "no-speech") {
-          setSpeechStatus("No speech heard. Click mic to speak again.");
+          setSpeechStatus("Listening...");
+          if (isHandsFreeRef.current && !isSpeakingRef.current) {
+            if (restartTimerRef.current) clearTimeout(restartTimerRef.current);
+            restartTimerRef.current = setTimeout(() => startListening(), 800);
+          }
         } else {
           setSpeechStatus(`Speech error: ${event.error}`);
         }
@@ -232,18 +259,19 @@ export function useSpeech(onSpeechEnd?: (finalText: string) => void) {
       cleanupAudioAnalyser();
       setIsListening(false);
       setSpeechStatus("Failed to start speech recognition");
-      console.error("Speech recognition start error:", err);
     }
   }, [autoSubmitTranscript, stopListening, cleanupAudioAnalyser]);
 
-  // Clean up audio context on component unmount
+  // Clean up on unmount
   useEffect(() => {
     return () => {
       cleanupAudioAnalyser();
+      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+      if (restartTimerRef.current) clearTimeout(restartTimerRef.current);
     };
   }, [cleanupAudioAnalyser]);
 
-  // Browser speech synthesis chunk player
+  // Browser speech synthesis chunk player with Auto-Listen Resume after speech
   const speakUtteranceChunk = useCallback((text: string) => {
     if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
     if (!text.trim()) return;
@@ -255,24 +283,43 @@ export function useSpeech(onSpeechEnd?: (finalText: string) => void) {
 
     utterance.onstart = () => {
       setIsSpeaking(true);
-      setAudioLevel(0.6); // Simulate vibrant voice level pulse during TTS speech
+      isSpeakingRef.current = true;
+      setAudioLevel(0.6);
+      // Abort mic while AI is speaking to prevent acoustic feedback loop
+      if (recognitionRef.current) {
+        try { recognitionRef.current.abort(); } catch (e) {}
+      }
     };
 
     utterance.onend = () => {
       if (!window.speechSynthesis.speaking) {
         setIsSpeaking(false);
+        isSpeakingRef.current = false;
         setAudioLevel(0);
+
+        // Resume auto-listening immediately after AI finishes speaking out loud
+        if (isHandsFreeRef.current) {
+          setTimeout(() => {
+            console.log("AI finished speaking. Resuming hands-free listening...");
+            startListening();
+          }, 400);
+        }
       }
     };
+
     utterance.onerror = () => {
       setIsSpeaking(false);
+      isSpeakingRef.current = false;
       setAudioLevel(0);
+      if (isHandsFreeRef.current) {
+        setTimeout(() => startListening(), 400);
+      }
     };
 
     window.speechSynthesis.speak(utterance);
-  }, []);
+  }, [startListening]);
 
-  // Function to process incoming live streaming text and speak completed sentence chunks instantly
+  // Process incoming streaming AI text chunks for TTS
   const processStreamingTTS = useCallback((fullStreamText: string, isStreamFinished: boolean) => {
     if (!fullStreamText) {
       spokenIndexRef.current = 0;
@@ -300,7 +347,7 @@ export function useSpeech(onSpeechEnd?: (finalText: string) => void) {
     }
   }, [speakUtteranceChunk]);
 
-  // Function to reset TTS spoken index buffer for a new conversation turn
+  // Reset TTS buffer
   const resetTTSBuffer = useCallback(() => {
     spokenIndexRef.current = 0;
     if (silenceTimerRef.current) {
@@ -310,6 +357,8 @@ export function useSpeech(onSpeechEnd?: (finalText: string) => void) {
     if (typeof window !== "undefined" && "speechSynthesis" in window) {
       window.speechSynthesis.cancel();
     }
+    setIsSpeaking(false);
+    isSpeakingRef.current = false;
     setAudioLevel(0);
   }, []);
 
@@ -322,6 +371,8 @@ export function useSpeech(onSpeechEnd?: (finalText: string) => void) {
     audioLevel,
     isWakeWordActive,
     setIsWakeWordActive,
+    isHandsFreeContinuous,
+    setIsHandsFreeContinuous,
     startListening,
     stopListening,
     speakUtteranceChunk,
