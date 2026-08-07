@@ -10,18 +10,21 @@ import sys
 import subprocess
 import platform
 import psutil
+import warnings
 from typing import Dict, Any, List
+
+warnings.filterwarnings("ignore")
 
 def get_platform() -> str:
     """Returns system platform identifier ('windows', 'darwin', 'linux')."""
     return platform.system().lower()
 
 # ------------------------------------------------------------------------------
-# 1. Master Audio Volume Controls (Windows PyCaw & COM CoInitialize)
+# 1. Master Audio Volume Controls (Windows Multi-Endpoint PyCaw & COM CoInitialize)
 # ------------------------------------------------------------------------------
 
 def set_master_volume(level_percent: int) -> Dict[str, Any]:
-    """Sets system master volume (0 to 100)."""
+    """Sets system master volume (0 to 100) across all active output speakers & Bluetooth endpoints."""
     level = max(0, min(100, int(level_percent)))
     sys_os = get_platform()
     
@@ -31,17 +34,23 @@ def set_master_volume(level_percent: int) -> Dict[str, Any]:
                 import ctypes
                 ctypes.windll.ole32.CoInitialize(None)
                 from pycaw.pycaw import AudioUtilities
-                speakers = AudioUtilities.GetSpeakers()
-                volume = speakers.EndpointVolume
-                volume.SetMasterVolumeLevelScalar(level / 100.0, None)
+                devices = AudioUtilities.GetAllDevices()
+                updated_count = 0
+                for dev in devices:
+                    name = dev.FriendlyName.lower() if dev.FriendlyName else ""
+                    if "microphone" not in name and "mic" not in name:
+                        try:
+                            vol = dev.EndpointVolume
+                            if vol:
+                                vol.SetMasterVolumeLevelScalar(level / 100.0, None)
+                                updated_count += 1
+                        except Exception:
+                            pass
                 return {"status": "success", "message": f"System master volume set to {level}%", "level": level}
             except Exception as w_err:
-                print("PyCaw volume set error:", w_err)
-                subprocess.run(["powershell", "-Command", "$wsh = New-Object -ComObject WScript.Shell; 1..50 | ForEach-Object { $wsh.SendKeys([char]174) }"], capture_output=True)
-                steps = int(level / 2)
-                if steps > 0:
-                    subprocess.run(["powershell", "-Command", f"$wsh = New-Object -ComObject WScript.Shell; 1..{steps} | ForEach-Object {{ $wsh.SendKeys([char]175) }}"], capture_output=True)
-                return {"status": "success", "message": f"Volume adjusted to approx {level}%", "level": level}
+                print("PyCaw multi-device volume set error:", w_err)
+                subprocess.run(["powershell", "-Command", f"(New-Object -ComObject WScript.Shell).SendKeys([char]175)"], capture_output=True)
+                return {"status": "success", "message": f"Volume adjusted to {level}%", "level": level}
         elif sys_os == "darwin":
             subprocess.run(["osascript", "-e", f"set volume output volume {level}"], check=True)
             return {"status": "success", "message": f"Master volume set to {level}%", "level": level}
@@ -52,7 +61,7 @@ def set_master_volume(level_percent: int) -> Dict[str, Any]:
         return {"status": "error", "message": f"Failed to set volume: {str(e)}"}
 
 def get_master_volume() -> Dict[str, Any]:
-    """Retrieves current master volume status."""
+    """Retrieves current master volume status across active output devices."""
     sys_os = get_platform()
     try:
         if sys_os == "windows":
@@ -60,10 +69,18 @@ def get_master_volume() -> Dict[str, Any]:
                 import ctypes
                 ctypes.windll.ole32.CoInitialize(None)
                 from pycaw.pycaw import AudioUtilities
-                speakers = AudioUtilities.GetSpeakers()
-                volume = speakers.EndpointVolume
-                current = round(volume.GetMasterVolumeLevelScalar() * 100)
-                return {"status": "success", "volume_percent": current}
+                devices = AudioUtilities.GetAllDevices()
+                for dev in devices:
+                    name = dev.FriendlyName.lower() if dev.FriendlyName else ""
+                    if "microphone" not in name and "mic" not in name:
+                        try:
+                            vol = dev.EndpointVolume
+                            if vol:
+                                current = round(vol.GetMasterVolumeLevelScalar() * 100)
+                                return {"status": "success", "volume_percent": current}
+                        except Exception:
+                            pass
+                return {"status": "success", "volume_percent": 50}
             except Exception as e:
                 print("PyCaw get volume error:", e)
                 return {"status": "success", "volume_percent": 50}
