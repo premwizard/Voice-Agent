@@ -3,7 +3,7 @@
 // WHAT THIS FILE IS: Auto-Sending Hands-Free Voice Speech Recognition & Synthesis Hook.
 // WHY IT IS USED: Automatically detects silence (pause in speech) and immediately 
 //                 transmits recorded voice text over WebSockets without clicking "Send",
-//                 and automatically restarts mic listening when AI finishes speaking.
+//                 preventing duplicate submissions and auto-restarting mic.
 // ==============================================================================
 
 "use client";
@@ -25,7 +25,6 @@ export function useSpeech(onSpeechEnd?: (finalText: string) => void) {
   const [speechStatus, setSpeechStatus] = useState<string>("Click microphone to speak");
   const [audioLevel, setAudioLevel] = useState<number>(0);
   
-  // Hands-free continuous auto-listen mode (Default: TRUE)
   const [isHandsFreeContinuous, setIsHandsFreeContinuous] = useState<boolean>(true);
   const [isWakeWordActive, setIsWakeWordActive] = useState<boolean>(true);
 
@@ -37,13 +36,13 @@ export function useSpeech(onSpeechEnd?: (finalText: string) => void) {
   const restartTimerRef = useRef<NodeJS.Timeout | null>(null);
   const isSpeakingRef = useRef<boolean>(false);
   const isHandsFreeRef = useRef<boolean>(true);
+  const isSubmittingRef = useRef<boolean>(false);
 
-  // Audio Context & Analyser refs for volume sampling
+  // Audio Context & Analyser refs
   const audioCtxRef = useRef<AudioContext | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const animFrameRef = useRef<number | null>(null);
 
-  // Cleanup audio analyzer resources
   const cleanupAudioAnalyser = useCallback(() => {
     if (animFrameRef.current) {
       cancelAnimationFrame(animFrameRef.current);
@@ -77,15 +76,20 @@ export function useSpeech(onSpeechEnd?: (finalText: string) => void) {
     isHandsFreeRef.current = isHandsFreeContinuous;
   }, [isHandsFreeContinuous]);
 
-  // Submit final transcript automatically
+  // Submit final transcript once per speech turn
   const autoSubmitTranscript = useCallback(() => {
     const finalRecordedText = transcriptRef.current.trim();
-    if (finalRecordedText && onSpeechEndRef.current) {
+    if (finalRecordedText && onSpeechEndRef.current && !isSubmittingRef.current) {
+      isSubmittingRef.current = true;
       console.log("Auto-submitting spoken text:", finalRecordedText);
       setSpeechStatus(`Sent: "${finalRecordedText}"`);
       onSpeechEndRef.current(finalRecordedText);
       setTranscript("");
       transcriptRef.current = "";
+      
+      setTimeout(() => {
+        isSubmittingRef.current = false;
+      }, 1200);
     }
   }, []);
 
@@ -95,12 +99,12 @@ export function useSpeech(onSpeechEnd?: (finalText: string) => void) {
       const hasSupport = !!(window.SpeechRecognition || window.webkitSpeechRecognition);
       setIsSupported(hasSupport);
       if (!hasSupport) {
-        setSpeechStatus("Web Speech API not supported in this browser (Use Chrome or Edge)");
+        setSpeechStatus("Web Speech API not supported in this browser");
       }
     }
   }, []);
 
-  // Function to stop microphone listening
+  // Stop microphone listening
   const stopListening = useCallback(() => {
     if (silenceTimerRef.current) {
       clearTimeout(silenceTimerRef.current);
@@ -123,7 +127,7 @@ export function useSpeech(onSpeechEnd?: (finalText: string) => void) {
     autoSubmitTranscript();
   }, [autoSubmitTranscript, cleanupAudioAnalyser]);
 
-  // Function to start microphone listening
+  // Start microphone listening
   const startListening = useCallback(() => {
     if (typeof window === "undefined") return;
     const SpeechRecognitionClass = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -134,9 +138,7 @@ export function useSpeech(onSpeechEnd?: (finalText: string) => void) {
       return;
     }
 
-    // Do not start mic if AI is currently speaking out loud
     if (isSpeakingRef.current) {
-      console.log("AI is currently speaking, delaying mic start...");
       return;
     }
 
@@ -145,6 +147,7 @@ export function useSpeech(onSpeechEnd?: (finalText: string) => void) {
         try { recognitionRef.current.abort(); } catch (e) {}
       }
 
+      isSubmittingRef.current = false;
       const recognition = new SpeechRecognitionClass();
       recognition.continuous = true;
       recognition.interimResults = true;
@@ -196,12 +199,9 @@ export function useSpeech(onSpeechEnd?: (finalText: string) => void) {
         const lowerText = currentTranscript.toLowerCase().trim();
         let cleanedPrompt = currentTranscript;
 
-        // Wake word handling ("Phoenix" or "Hey Phoenix")
         if (lowerText === "phoenix" || lowerText === "hey phoenix" || lowerText === "hi phoenix") {
-          // Single name call -> Keep full prompt as "Hey Phoenix" so AI responds to its name!
           cleanedPrompt = "Hey Phoenix";
         } else if (lowerText.startsWith("phoenix") || lowerText.startsWith("hey phoenix") || lowerText.startsWith("hi phoenix")) {
-          // Command prefixed with name -> strip prefix for cleaner tool parsing
           cleanedPrompt = currentTranscript.replace(/^(hey\s+|hi\s+)?phoenix[,!]?\s*/i, "");
           if (!cleanedPrompt.trim()) cleanedPrompt = "Hey Phoenix";
         }
@@ -215,10 +215,8 @@ export function useSpeech(onSpeechEnd?: (finalText: string) => void) {
           clearTimeout(silenceTimerRef.current);
         }
 
-        // AUTO-SEND SILENCE DETECTOR: 1.0 second pause auto-transmits prompt
         if (cleanedPrompt.trim()) {
           silenceTimerRef.current = setTimeout(() => {
-            console.log("Pause detected. Auto-submitting prompt...");
             stopListening();
           }, 1000);
         }
@@ -229,11 +227,9 @@ export function useSpeech(onSpeechEnd?: (finalText: string) => void) {
         setIsListening(false);
         autoSubmitTranscript();
 
-        // AUTO-RESTART MIC: If hands-free continuous mode is active and AI is not speaking out loud
         if (isHandsFreeRef.current && !isSpeakingRef.current) {
           if (restartTimerRef.current) clearTimeout(restartTimerRef.current);
           restartTimerRef.current = setTimeout(() => {
-            console.log("Auto-restarting continuous mic listening...");
             startListening();
           }, 600);
         }
@@ -262,7 +258,6 @@ export function useSpeech(onSpeechEnd?: (finalText: string) => void) {
     }
   }, [autoSubmitTranscript, stopListening, cleanupAudioAnalyser]);
 
-  // Clean up on unmount
   useEffect(() => {
     return () => {
       cleanupAudioAnalyser();
@@ -271,7 +266,7 @@ export function useSpeech(onSpeechEnd?: (finalText: string) => void) {
     };
   }, [cleanupAudioAnalyser]);
 
-  // Browser speech synthesis chunk player with Auto-Listen Resume after speech
+  // Speech synthesis chunk player
   const speakUtteranceChunk = useCallback((text: string) => {
     if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
     if (!text.trim()) return;
@@ -285,7 +280,6 @@ export function useSpeech(onSpeechEnd?: (finalText: string) => void) {
       setIsSpeaking(true);
       isSpeakingRef.current = true;
       setAudioLevel(0.6);
-      // Abort mic while AI is speaking to prevent acoustic feedback loop
       if (recognitionRef.current) {
         try { recognitionRef.current.abort(); } catch (e) {}
       }
@@ -297,10 +291,8 @@ export function useSpeech(onSpeechEnd?: (finalText: string) => void) {
         isSpeakingRef.current = false;
         setAudioLevel(0);
 
-        // Resume auto-listening immediately after AI finishes speaking out loud
         if (isHandsFreeRef.current) {
           setTimeout(() => {
-            console.log("AI finished speaking. Resuming hands-free listening...");
             startListening();
           }, 400);
         }
@@ -319,7 +311,6 @@ export function useSpeech(onSpeechEnd?: (finalText: string) => void) {
     window.speechSynthesis.speak(utterance);
   }, [startListening]);
 
-  // Process incoming streaming AI text chunks for TTS
   const processStreamingTTS = useCallback((fullStreamText: string, isStreamFinished: boolean) => {
     if (!fullStreamText) {
       spokenIndexRef.current = 0;
@@ -347,7 +338,6 @@ export function useSpeech(onSpeechEnd?: (finalText: string) => void) {
     }
   }, [speakUtteranceChunk]);
 
-  // Reset TTS buffer
   const resetTTSBuffer = useCallback(() => {
     spokenIndexRef.current = 0;
     if (silenceTimerRef.current) {

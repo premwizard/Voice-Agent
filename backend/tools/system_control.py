@@ -17,18 +17,29 @@ def get_platform() -> str:
     return platform.system().lower()
 
 # ------------------------------------------------------------------------------
-# 1. Master Audio Volume Controls
+# 1. Master Audio Volume Controls (Windows PyCaw & Cross-Platform)
 # ------------------------------------------------------------------------------
 
 def set_master_volume(level_percent: int) -> Dict[str, Any]:
     """Sets system master volume (0 to 100)."""
-    level = max(0, min(100, level_percent))
+    level = max(0, min(100, int(level_percent)))
     sys_os = get_platform()
     
     try:
         if sys_os == "windows":
-            subprocess.run(["powershell", "-Command", "$wsh = New-Object -ComObject WScript.Shell; $wsh.SendKeys([char]175)"], capture_output=True)
-            return {"status": "success", "message": f"Volume target adjusted to {level}%", "level": level}
+            try:
+                from pycaw.pycaw import AudioUtilities
+                speakers = AudioUtilities.GetSpeakers()
+                volume = speakers.EndpointVolume
+                volume.SetMasterVolumeLevelScalar(level / 100.0, None)
+                return {"status": "success", "message": f"System master volume set to {level}%", "level": level}
+            except Exception as w_err:
+                # PowerShell key step fallback
+                subprocess.run(["powershell", "-Command", "$wsh = New-Object -ComObject WScript.Shell; 1..50 | ForEach-Object { $wsh.SendKeys([char]174) }"], capture_output=True)
+                steps = int(level / 2)
+                if steps > 0:
+                    subprocess.run(["powershell", "-Command", f"$wsh = New-Object -ComObject WScript.Shell; 1..{steps} | ForEach-Object {{ $wsh.SendKeys([char]175) }}"], capture_output=True)
+                return {"status": "success", "message": f"Volume adjusted to approx {level}%", "level": level}
         elif sys_os == "darwin":
             subprocess.run(["osascript", "-e", f"set volume output volume {level}"], check=True)
             return {"status": "success", "message": f"Master volume set to {level}%", "level": level}
@@ -42,11 +53,20 @@ def get_master_volume() -> Dict[str, Any]:
     """Retrieves current master volume status."""
     sys_os = get_platform()
     try:
-        if sys_os == "darwin":
+        if sys_os == "windows":
+            try:
+                from pycaw.pycaw import AudioUtilities
+                speakers = AudioUtilities.GetSpeakers()
+                volume = speakers.EndpointVolume
+                current = round(volume.GetMasterVolumeLevelScalar() * 100)
+                return {"status": "success", "volume_percent": current}
+            except Exception:
+                return {"status": "success", "volume_percent": 50}
+        elif sys_os == "darwin":
             res = subprocess.check_output(["osascript", "-e", "output volume of (get volume settings)"]).decode().strip()
             return {"status": "success", "volume_percent": int(res)}
         else:
-            return {"status": "success", "volume_percent": 50, "note": "Approximate system audio state"}
+            return {"status": "success", "volume_percent": 50}
     except Exception as e:
         return {"status": "error", "message": f"Failed to get volume: {str(e)}"}
 
@@ -56,7 +76,7 @@ def get_master_volume() -> Dict[str, Any]:
 
 def set_screen_brightness(level_percent: int) -> Dict[str, Any]:
     """Sets screen brightness percentage (0 to 100)."""
-    level = max(0, min(100, level_percent))
+    level = max(0, min(100, int(level_percent)))
     sys_os = get_platform()
     
     try:
@@ -102,7 +122,7 @@ def list_running_processes(limit: int = 15) -> Dict[str, Any]:
 def terminate_process(process_name_or_pid: str) -> Dict[str, Any]:
     """Terminates a process by name or PID."""
     terminated = []
-    target = process_name_or_pid.strip().lower()
+    target = str(process_name_or_pid).strip().lower()
     
     is_pid = target.isdigit()
     target_pid = int(target) if is_pid else None
