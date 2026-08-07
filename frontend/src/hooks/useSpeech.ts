@@ -30,6 +30,8 @@ export function useSpeech(onSpeechEnd?: (finalText: string) => void) {
   const [speechStatus, setSpeechStatus] = useState<string>("Click microphone to speak");
   // State tracking live audio input volume level (0 to 1) for visualizers
   const [audioLevel, setAudioLevel] = useState<number>(0);
+  // State tracking Wake Word detection mode ("Phoenix")
+  const [isWakeWordActive, setIsWakeWordActive] = useState<boolean>(true);
 
   // Ref storing SpeechRecognition instance across renders
   const recognitionRef = useRef<any>(null);
@@ -180,8 +182,19 @@ export function useSpeech(onSpeechEnd?: (finalText: string) => void) {
         for (let i = 0; i < event.results.length; i++) {
           currentTranscript += event.results[i][0].transcript;
         }
-        setTranscript(currentTranscript);
-        setSpeechStatus(`Speaking: "${currentTranscript}"`);
+
+        // Wake word detection ("Phoenix" / "Hey Phoenix")
+        const lowerText = currentTranscript.toLowerCase().trim();
+        let cleanedPrompt = currentTranscript;
+        if (lowerText.startsWith("phoenix") || lowerText.startsWith("hey phoenix")) {
+          console.log("🔥 Wake Word 'Phoenix' triggered!");
+          cleanedPrompt = currentTranscript.replace(/^(hey\s+)?phoenix[,!]?\s*/i, "");
+        }
+
+        setTranscript(cleanedPrompt);
+        if (cleanedPrompt.trim()) {
+          setSpeechStatus(`Speaking: "${cleanedPrompt}"`);
+        }
 
         // Reset silence timer on every new spoken word
         if (silenceTimerRef.current) {
@@ -189,7 +202,7 @@ export function useSpeech(onSpeechEnd?: (finalText: string) => void) {
         }
 
         // AUTO-SEND TRIGGER: If user pauses for 1.2 seconds after speaking, automatically send prompt
-        if (currentTranscript.trim()) {
+        if (cleanedPrompt.trim()) {
           silenceTimerRef.current = setTimeout(() => {
             console.log("Pause in speech detected. Auto-sending prompt over WebSocket...");
             stopListening();
@@ -307,6 +320,8 @@ export function useSpeech(onSpeechEnd?: (finalText: string) => void) {
     isSupported,
     speechStatus,
     audioLevel,
+    isWakeWordActive,
+    setIsWakeWordActive,
     startListening,
     stopListening,
     speakUtteranceChunk,

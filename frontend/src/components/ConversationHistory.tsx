@@ -46,10 +46,10 @@ export default function ConversationHistory({
             <Sparkles className="w-6 h-6 animate-pulse" />
           </div>
           <h3 className="text-sm font-semibold text-slate-200 mb-1">
-            Voice Agent Ready
+            Phoenix Assistant Ready
           </h3>
           <p className="text-xs text-slate-400 max-w-sm mx-auto">
-            Click the microphone button or pick a prompt below to start talking with AI in real time.
+            Say &quot;Phoenix&quot; or click the microphone button to command Phoenix in real time.
           </p>
         </div>
       )}
@@ -79,7 +79,7 @@ export default function ConversationHistory({
             >
               <div className="flex items-center justify-between gap-4 mb-1.5 opacity-80 text-[10px]">
                 <span className="font-semibold tracking-wider uppercase">
-                  {isUser ? "You" : "Voice AI"}
+                  {isUser ? "You" : "Phoenix"}
                 </span>
                 <span className="font-mono">{msg.timestamp}</span>
               </div>
@@ -138,7 +138,7 @@ export default function ConversationHistory({
             <div className="flex items-center justify-between gap-4 mb-1.5 text-[10px] text-indigo-300">
               <span className="font-semibold tracking-wider uppercase flex items-center gap-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-ping"></span>
-                Streaming AI Voice
+                Phoenix AI Assistant
               </span>
               <span className="font-mono">Live</span>
             </div>

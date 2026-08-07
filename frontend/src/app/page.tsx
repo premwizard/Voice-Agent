@@ -98,6 +98,8 @@ export default function Home() {
     isSupported,
     speechStatus,
     audioLevel,
+    isWakeWordActive,
+    setIsWakeWordActive,
     startListening,
     stopListening,
     processStreamingTTS,
@@ -209,20 +211,34 @@ export default function Home() {
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-base sm:text-lg font-extrabold tracking-tight bg-gradient-to-r from-blue-400 via-indigo-300 to-purple-400 bg-clip-text text-transparent">
-                Voice Agent Studio
+                Phoenix AI Assistant
               </h1>
               <span className="px-2 py-0.5 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-[10px] font-semibold tracking-wider">
-                v2.0 AI
+                v2.5 JARVIS
               </span>
             </div>
             <p className="text-xs text-slate-400 hidden sm:block">
-              Real-Time Voice Streaming • OpenRouter LLM • WebSockets
+              Jarvis-Style Personal Assistant • Real-Time Voice Streaming • OpenRouter LLM
             </p>
           </div>
         </div>
 
         {/* Status Indicators & Settings Controls */}
         <div className="flex items-center space-x-3">
+          {/* Wake Word Phoenix Toggle */}
+          <button
+            onClick={() => setIsWakeWordActive(!isWakeWordActive)}
+            className={`px-3 py-1.5 rounded-xl border transition text-[11px] font-mono flex items-center gap-1.5 ${
+              isWakeWordActive
+                ? "bg-amber-950/60 border-amber-500/50 text-amber-300 shadow-amber-950/30"
+                : "bg-slate-900 border-slate-800 text-slate-400"
+            }`}
+            title="Wake Word Listener ('Phoenix')"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
+            <span className="hidden sm:inline">{isWakeWordActive ? "Wake: 'Phoenix'" : "Wake Off"}</span>
+          </button>
+
           {/* Mute Audio Button */}
           <button
             onClick={() => setIsMuted(!isMuted)}

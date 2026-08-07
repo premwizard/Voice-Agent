@@ -50,7 +50,11 @@ class LLMService:
         Supports multi-turn conversation memory history and dynamic model/personality selection.
         """
         active_model = model or self.openrouter_model
-        active_sys_prompt = system_prompt or "You are a real-time AI Voice Assistant. Keep responses concise, conversational, and natural."
+        active_sys_prompt = system_prompt or (
+            "You are Phoenix, an advanced, highly intelligent personal AI assistant inspired by Jarvis. "
+            "You assist the user with tasks, computer control, memory management, and workflow automation. "
+            "Keep voice responses direct, concise, helpful, and natural."
+        )
 
         # Construct messages payload with system prompt, history, and current prompt
         system_msg = {
