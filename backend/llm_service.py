@@ -20,50 +20,46 @@ def process_system_tools(prompt: str) -> Optional[str]:
     p = prompt.lower().strip()
     
     # 1. Volume Controls
-    if ("increase" in p or "up" in p or "raise" in p or "louder" in p) and "volume" in p:
-        current_res = tool_registry.execute("get_master_volume")
-        curr = current_res.get("volume_percent", 50)
-        target = min(100, curr + 20)
-        tool_registry.execute("set_master_volume", level_percent=target)
-        return f"[System Tool Action Executed: Physical Windows master volume increased from {curr}% to {target}%]"
-        
-    elif ("decrease" in p or "down" in p or "lower" in p or "quieter" in p) and "volume" in p:
-        current_res = tool_registry.execute("get_master_volume")
-        curr = current_res.get("volume_percent", 50)
-        target = max(0, curr - 20)
-        tool_registry.execute("set_master_volume", level_percent=target)
-        return f"[System Tool Action Executed: Physical Windows master volume decreased from {curr}% to {target}%]"
-
-    elif "set volume" in p or "volume to" in p:
-        nums = re.findall(r'\d+', p)
-        if nums:
-            val = int(nums[0])
-            tool_registry.execute("set_master_volume", level_percent=val)
-            return f"[System Tool Action Executed: Physical Windows master volume set to {val}%]"
-        elif "mute" in p:
+    if "volume" in p or "sound" in p or "louder" in p or "quieter" in p or "mute" in p:
+        if "mute" in p:
             tool_registry.execute("set_master_volume", level_percent=0)
-            return f"[System Tool Action Executed: Master volume muted to 0%]"
-
-    elif "mute" in p:
-        tool_registry.execute("set_master_volume", level_percent=0)
-        return f"[System Tool Action Executed: Master volume muted to 0%]"
+            return "[System Tool Action Executed: Master volume muted to 0%]"
+        elif any(w in p for w in ["increase", "up", "raise", "louder", "higher", "more", "add"]):
+            current_res = tool_registry.execute("get_master_volume")
+            curr = current_res.get("volume_percent", 50)
+            target = min(100, curr + 20)
+            tool_registry.execute("set_master_volume", level_percent=target)
+            return f"[System Tool Action Executed: Physical Windows master volume increased from {curr}% to {target}%]"
+        elif any(w in p for w in ["decrease", "down", "lower", "quieter", "reduce", "less"]):
+            current_res = tool_registry.execute("get_master_volume")
+            curr = current_res.get("volume_percent", 50)
+            target = max(0, curr - 20)
+            tool_registry.execute("set_master_volume", level_percent=target)
+            return f"[System Tool Action Executed: Physical Windows master volume decreased from {curr}% to {target}%]"
+        else:
+            nums = re.findall(r'\d+', p)
+            if nums:
+                val = int(nums[0])
+                tool_registry.execute("set_master_volume", level_percent=val)
+                return f"[System Tool Action Executed: Physical Windows master volume set to {val}%]"
 
     # 2. Application Launcher
-    elif p.startswith("open ") or p.startswith("launch ") or p.startswith("start "):
-        match = re.search(r'(open|launch|start)\s+([a-zA-Z0-9\s]+)', p)
+    if any(kw in p for kw in ["open ", "launch ", "start "]):
+        match = re.search(r'(open|launch|start)\s+(.+)', p)
         if match:
             app_target = match.group(2).strip()
+            app_target = re.sub(r'[^\w\s-]', '', app_target)
             if app_target not in ["the", "a", "my", "this"]:
                 res = tool_registry.execute("open_application", app_name=app_target)
                 return f"[System Tool Action Executed: Opened application '{app_target}']"
 
     # 3. System Telemetry
-    elif "telemetry" in p or "cpu usage" in p or "ram usage" in p or "system status" in p:
+    if "telemetry" in p or "cpu" in p or "ram" in p or "system status" in p:
         res = tool_registry.execute("get_system_telemetry")
         return f"[System Tool Action Executed: CPU: {res.get('cpu_usage_percent')}%, RAM: {res.get('ram_percent')}%, Disk Free: {res.get('disk_free_gb')}GB]"
 
     # 4. Lock Workstation
-    elif "lock pc" in p or "lock workstation" in p or "lock computer" in p:
+    if "lock pc" in p or "lock workstation" in p or "lock computer" in p:
         res = tool_registry.execute("lock_workstation")
         return "[System Tool Action Executed: Workstation screen locked]"
 
@@ -105,7 +101,6 @@ class LLMService:
             "Keep voice responses direct, concise, helpful, and natural."
         )
 
-        # Check and execute system automation tools for this prompt turn
         tool_result = process_system_tools(prompt)
 
         system_msg = {
@@ -123,7 +118,6 @@ class LLMService:
 
         formatted_messages.append({"role": "user", "content": prompt})
 
-        # Inject tool execution confirmation into LLM context if a system tool was triggered
         if tool_result:
             formatted_messages.append({"role": "system", "content": tool_result})
 

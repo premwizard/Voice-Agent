@@ -8,6 +8,7 @@
 import os
 import sys
 import platform
+import subprocess
 import psutil
 from typing import Dict, Any, Callable, List
 
@@ -54,7 +55,7 @@ def get_system_telemetry() -> Dict[str, Any]:
     from backend.tools.system_control import get_detailed_telemetry
     return get_detailed_telemetry()
 
-@tool_registry.register("open_application", "Launches a desktop application by name (e.g. notepad, chrome, calc, code, vs code).")
+@tool_registry.register("open_application", "Launches a desktop application by name (e.g. notepad, chrome, calc, code, vs code, antigravity).")
 def open_application(app_name: str) -> Dict[str, Any]:
     """Launches an application by name or executable command."""
     clean_name = app_name.lower().strip()
@@ -71,6 +72,9 @@ def open_application(app_name: str) -> Dict[str, Any]:
         "vs code": "code",
         "visual studio code": "code",
         "code": "code",
+        "antigravity": r"C:\Users\Asus\AppData\Local\Programs\Antigravity IDE\Antigravity IDE.exe",
+        "antigravity ide": r"C:\Users\Asus\AppData\Local\Programs\Antigravity IDE\Antigravity IDE.exe",
+        "antigravity-ide": r"C:\Users\Asus\AppData\Local\Programs\Antigravity IDE\Antigravity IDE.exe",
         "spotify": "spotify",
         "explorer": "explorer.exe",
         "file explorer": "explorer.exe",
@@ -79,8 +83,11 @@ def open_application(app_name: str) -> Dict[str, Any]:
     sys_os = platform.system().lower()
     try:
         if sys_os == "windows":
-            cmd_str = f'cmd /c start "" "{target}"' if not target.endswith(".exe") else target
-            os.system(cmd_str)
+            if os.path.exists(target):
+                subprocess.Popen([target])
+            else:
+                cmd_str = f'cmd /c start "" "{target}"' if not target.endswith(".exe") else target
+                os.system(cmd_str)
         elif sys_os == "darwin":
             os.system(f'open -a "{target}"')
         else:

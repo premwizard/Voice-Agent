@@ -145,12 +145,12 @@ export const ComputerControlPanel: React.FC = () => {
           <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Quick Application Launcher</h3>
           <div className="grid grid-cols-3 gap-2">
             {[
+              { label: "Antigravity", app: "antigravity", icon: "🚀" },
               { label: "VS Code", app: "vscode", icon: "💙" },
               { label: "Chrome", app: "chrome", icon: "🌐" },
               { label: "Terminal", app: "cmd", icon: "⚙️" },
               { label: "Calculator", app: "calc", icon: "🧮" },
               { label: "Notepad", app: "notepad", icon: "📝" },
-              { label: "Explorer", app: "explorer", icon: "📁" },
             ].map((item) => (
               <button
                 key={item.app}
