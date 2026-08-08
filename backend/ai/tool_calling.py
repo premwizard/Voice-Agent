@@ -122,6 +122,36 @@ class AIToolCaller:
                 tool_name = "set_screen_brightness"
                 args = {"level_percent": int(nums[0])}
 
+        # Vision & Screen Intent
+        elif any(kw in p for kw in ["screen", "monitor", "what's on my screen", "what is on my screen", "look at my screen"]):
+            tool_name = "analyze_screen"
+            args = {"prompt": user_prompt}
+        elif any(kw in p for kw in ["active window", "focused window", "what window"]):
+            tool_name = "get_active_window"
+
+        # Web Automation & Searching Intent
+        elif any(kw in p for kw in ["open website", "open site", "open url", "go to "]):
+            match = re.search(r'(open\s+website|open\s+site|open\s+url|go\s+to)\s+(.+)', p)
+            if match:
+                tool_name = "open_website"
+                args = {"url": match.group(2).strip()}
+        elif any(kw in p for kw in ["search web", "search google", "search for ", "google "]):
+            match = re.search(r'(search\s+web\s+for|search\s+google\s+for|search\s+for|google)\s+(.+)', p)
+            if match:
+                tool_name = "web_search"
+                args = {"query": match.group(2).strip()}
+
+        # Memory Intent
+        elif any(kw in p for kw in ["remember that", "save memory", "remember this"]):
+            match = re.search(r'remember\s+that\s+(.+)', p)
+            if match:
+                content = match.group(1).strip()
+                key = content.split()[0] if content else "user_fact"
+                tool_name = "remember_fact"
+                args = {"key": key, "value": content}
+        elif any(kw in p for kw in ["list memories", "show memories", "what do you remember"]):
+            tool_name = "list_memories"
+
         # Telemetry & Performance
         elif any(kw in p for kw in ["ram", "memory"]):
             tool_name = "get_memory_usage"

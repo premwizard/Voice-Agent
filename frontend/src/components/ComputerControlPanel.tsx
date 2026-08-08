@@ -2,12 +2,12 @@
 
 // ==============================================================================
 // FILE: frontend/src/components/ComputerControlPanel.tsx
-// WHAT THIS FILE IS: Computer Control & Process Management UI Component.
-// WHY IT IS USED: Provides quick interactive controls for system volume, screen
-//                 brightness, application launcher, process manager, and power options.
+// WHAT THIS FILE IS: Computer Control & Hardware Sync Component.
+// WHY IT IS USED: Provides live bi-directional hardware level synchronization for system 
+//                 volume and screen brightness, matching laptop physical keys and OS state.
 // ==============================================================================
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { executeSystemAction, ProcessItem } from "../services/apiService";
 
 export const ComputerControlPanel: React.FC = () => {
@@ -23,10 +23,45 @@ export const ComputerControlPanel: React.FC = () => {
   const [processes, setProcesses] = useState<ProcessItem[]>([]);
   const [loadingProcs, setLoadingProcs] = useState<boolean>(false);
 
+  const isUserDraggingRef = useRef<boolean>(false);
+
   const showFeedback = (msg: string) => {
     setStatusMessage(msg);
     setTimeout(() => setStatusMessage(null), 3500);
   };
+
+  // Sync volume and brightness from OS hardware
+  const syncHardwareLevels = async () => {
+    if (isUserDraggingRef.current) return;
+
+    try {
+      const volRes = await executeSystemAction("get_master_volume");
+      if (volRes.result?.data?.volume_percent !== undefined) {
+        setVolume(volRes.result.data.volume_percent);
+      } else if (volRes.result?.data?.level !== undefined) {
+        setVolume(volRes.result.data.level);
+      }
+
+      const brightRes = await executeSystemAction("get_screen_brightness");
+      if (brightRes.result?.data?.brightness_percent !== undefined) {
+        setBrightness(brightRes.result.data.brightness_percent);
+      } else if (brightRes.result?.data?.brightness !== undefined) {
+        setBrightness(brightRes.result.data.brightness);
+      }
+    } catch (e) {
+      console.warn("Hardware level sync failed:", e);
+    }
+  };
+
+  // Initial fetch and 2-second polling loop for real-time hardware sync
+  useEffect(() => {
+    syncHardwareLevels();
+    const timer = setInterval(() => {
+      syncHardwareLevels();
+    }, 2000);
+
+    return () => clearInterval(timer);
+  }, []);
 
   const handleAppLaunch = async (appName: string) => {
     showFeedback(`Launching ${appName}...`);
@@ -38,12 +73,29 @@ export const ComputerControlPanel: React.FC = () => {
 
   const handleVolumeChange = async (newVol: number) => {
     setVolume(newVol);
-    await executeSystemAction("set_master_volume", { level_percent: newVol });
+    isUserDraggingRef.current = true;
+    const res = await executeSystemAction("set_master_volume", { level_percent: newVol });
+    
+    // Sync to exact read-back value from Windows driver
+    if (res.result?.data?.volume_percent !== undefined) {
+      setVolume(res.result.data.volume_percent);
+    } else if (res.result?.data?.level !== undefined) {
+      setVolume(res.result.data.level);
+    }
+    setTimeout(() => { isUserDraggingRef.current = false; }, 1000);
   };
 
   const handleBrightnessChange = async (newBright: number) => {
     setBrightness(newBright);
-    await executeSystemAction("set_screen_brightness", { level_percent: newBright });
+    isUserDraggingRef.current = true;
+    const res = await executeSystemAction("set_screen_brightness", { level_percent: newBright });
+    
+    if (res.result?.data?.brightness_percent !== undefined) {
+      setBrightness(res.result.data.brightness_percent);
+    } else if (res.result?.data?.brightness !== undefined) {
+      setBrightness(res.result.data.brightness);
+    }
+    setTimeout(() => { isUserDraggingRef.current = false; }, 1000);
   };
 
   const handleLockPC = async () => {
@@ -67,7 +119,9 @@ export const ComputerControlPanel: React.FC = () => {
   const loadProcesses = async () => {
     setLoadingProcs(true);
     const res = await executeSystemAction("list_running_processes", { limit: 12 });
-    if (res.result?.processes) {
+    if (res.result?.data?.processes) {
+      setProcesses(res.result.data.processes);
+    } else if (res.result?.processes) {
       setProcesses(res.result.processes);
     }
     setLoadingProcs(false);
@@ -105,7 +159,15 @@ export const ComputerControlPanel: React.FC = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Sliders Box */}
         <div className="md:col-span-2 bg-slate-950/40 border border-slate-800/60 rounded-xl p-4 space-y-4">
-          <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Audio & Display Controls</h3>
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Audio & Display Controls</h3>
+            <button
+              onClick={syncHardwareLevels}
+              className="text-[11px] text-cyan-400 hover:underline font-mono"
+            >
+              ↻ Sync Laptop
+            </button>
+          </div>
           
           {/* Master Volume */}
           <div className="space-y-1.5">

@@ -19,6 +19,7 @@ from tools.system_control import (
     set_master_volume,
     get_master_volume,
     set_screen_brightness,
+    get_screen_brightness,
     list_running_processes,
     terminate_process,
     lock_workstation,
@@ -26,6 +27,9 @@ from tools.system_control import (
     shutdown_system,
     restart_system
 )
+from tools.vision import screen_vision
+from memory.memory_manager import memory_manager
+from tools.browser_automation import browser_engine
 
 class ToolRegistry:
     def __init__(self):
@@ -274,6 +278,14 @@ def tool_set_screen_brightness(level_percent: Optional[int] = None, level: Optio
     return set_screen_brightness(target)
 
 @tool_registry.register(
+    "get_screen_brightness",
+    "Retrieves current monitor screen brightness percentage state.",
+    parameters={"type": "object", "properties": {}, "required": []}
+)
+def tool_get_screen_brightness() -> Dict[str, Any]:
+    return get_screen_brightness()
+
+@tool_registry.register(
     "list_running_processes",
     "Lists active running system processes sorted by CPU and RAM utilization.",
     parameters={
@@ -344,3 +356,123 @@ def tool_shutdown_system(confirmed: bool = False) -> Dict[str, Any]:
 )
 def tool_restart_system(confirmed: bool = False) -> Dict[str, Any]:
     return restart_system(confirmed)
+
+# ------------------------------------------------------------------------------
+# Vision & Screen Tools
+# ------------------------------------------------------------------------------
+
+@tool_registry.register(
+    "analyze_screen",
+    "Captures active screen view and analyzes visible code, text, or applications using AI Vision.",
+    parameters={
+        "type": "object",
+        "properties": {
+            "prompt": {"type": "string", "description": "Question or prompt about what is visible on the screen."}
+        },
+        "required": []
+    }
+)
+def tool_analyze_screen(prompt: str = "Describe what is currently visible on the screen.") -> Dict[str, Any]:
+    return screen_vision.analyze_screen(prompt)
+
+@tool_registry.register(
+    "get_active_window",
+    "Returns title, process ID, and dimensions of the currently focused desktop window.",
+    parameters={"type": "object", "properties": {}, "required": []}
+)
+def tool_get_active_window() -> Dict[str, Any]:
+    return screen_vision.get_active_window_info()
+
+# ------------------------------------------------------------------------------
+# Persistent Memory Tools
+# ------------------------------------------------------------------------------
+
+@tool_registry.register(
+    "remember_fact",
+    "Saves a user preference, project folder path, or personal fact into long-term SQLite memory.",
+    parameters={
+        "type": "object",
+        "properties": {
+            "key": {"type": "string", "description": "Identifier key for the memory (e.g. main_project_path, preferred_browser)."},
+            "value": {"type": "string", "description": "Content value of the memory to save."},
+            "category": {"type": "string", "description": "Optional category (e.g. preferences, paths, notes)."}
+        },
+        "required": ["key", "value"]
+    }
+)
+def tool_remember_fact(key: str, value: str, category: str = "general") -> Dict[str, Any]:
+    return memory_manager.remember_fact(key, value, category)
+
+@tool_registry.register(
+    "recall_fact",
+    "Retrieves a saved user preference or fact from long-term SQLite memory by key.",
+    parameters={
+        "type": "object",
+        "properties": {
+            "key": {"type": "string", "description": "Memory key identifier to search."}
+        },
+        "required": ["key"]
+    }
+)
+def tool_recall_fact(key: str) -> Dict[str, Any]:
+    return memory_manager.recall_fact(key)
+
+@tool_registry.register(
+    "list_memories",
+    "Lists all saved long-term user memories and preferences stored in SQLite.",
+    parameters={
+        "type": "object",
+        "properties": {
+            "category": {"type": "string", "description": "Optional memory category filter."}
+        },
+        "required": []
+    }
+)
+def tool_list_memories(category: Optional[str] = None) -> Dict[str, Any]:
+    return memory_manager.list_memories(category)
+
+@tool_registry.register(
+    "forget_memory",
+    "Deletes a saved long-term memory entry from SQLite by key.",
+    parameters={
+        "type": "object",
+        "properties": {
+            "key": {"type": "string", "description": "Memory key identifier to delete."}
+        },
+        "required": ["key"]
+    }
+)
+def tool_forget_memory(key: str) -> Dict[str, Any]:
+    return memory_manager.forget_memory(key)
+
+# ------------------------------------------------------------------------------
+# Web Automation & Browsing Tools
+# ------------------------------------------------------------------------------
+
+@tool_registry.register(
+    "open_website",
+    "Opens a web URL or domain (e.g. youtube.com, github.com) in the default web browser.",
+    parameters={
+        "type": "object",
+        "properties": {
+            "url": {"type": "string", "description": "Web URL or domain name to open."}
+        },
+        "required": ["url"]
+    }
+)
+def tool_open_website(url: str) -> Dict[str, Any]:
+    return browser_engine.open_website(url)
+
+@tool_registry.register(
+    "web_search",
+    "Searches Google/web for a query string in the default web browser.",
+    parameters={
+        "type": "object",
+        "properties": {
+            "query": {"type": "string", "description": "Web search query."}
+        },
+        "required": ["query"]
+    }
+)
+def tool_web_search(query: str) -> Dict[str, Any]:
+    return browser_engine.web_search(query)

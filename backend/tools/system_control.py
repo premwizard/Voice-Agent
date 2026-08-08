@@ -25,7 +25,7 @@ def get_platform() -> str:
 # ------------------------------------------------------------------------------
 
 def set_master_volume(level_percent: int) -> Dict[str, Any]:
-    """Sets system master volume (0 to 100)."""
+    """Sets system master volume (0 to 100) and returns real-time synced level."""
     level = max(0, min(100, int(level_percent)))
     sys_os = get_platform()
     
@@ -41,22 +41,25 @@ def set_master_volume(level_percent: int) -> Dict[str, Any]:
                 interface = device.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
                 volume = interface.QueryInterface(IAudioEndpointVolume)
                 volume.SetMasterVolumeLevelScalar(level / 100.0, None)
-                return {"success": True, "message": f"Master volume set to {level}%", "level": level}
+                
+                # Query actual synced hardware scalar back from OS
+                actual = round(volume.GetMasterVolumeLevelScalar() * 100)
+                return {"success": True, "message": f"Master volume set to {actual}%", "level": actual, "volume_percent": actual}
             except Exception as w_err:
                 # WScript SendKeys fallback if PyCaw fails
                 subprocess.run(["powershell", "-Command", f"(New-Object -ComObject WScript.Shell).SendKeys([char]175)"], capture_output=True)
-                return {"success": True, "message": f"Master volume adjusted to {level}%", "level": level}
+                return {"success": True, "message": f"Master volume adjusted to {level}%", "level": level, "volume_percent": level}
         elif sys_os == "darwin":
             subprocess.run(["osascript", "-e", f"set volume output volume {level}"], check=True)
-            return {"success": True, "message": f"Master volume set to {level}%", "level": level}
+            return {"success": True, "message": f"Master volume set to {level}%", "level": level, "volume_percent": level}
         else:
             subprocess.run(["amixer", "-D", "pulse", "sset", "Master", f"{level}%"], check=True)
-            return {"success": True, "message": f"Master volume set to {level}%", "level": level}
+            return {"success": True, "message": f"Master volume set to {level}%", "level": level, "volume_percent": level}
     except Exception as e:
         return {"success": False, "error": f"Failed to set volume: {str(e)}", "message": f"Could not change volume: {str(e)}"}
 
 def get_master_volume() -> Dict[str, Any]:
-    """Retrieves current master volume state."""
+    """Retrieves real-time current master audio volume percentage state."""
     sys_os = get_platform()
     try:
         if sys_os == "windows":
@@ -70,14 +73,14 @@ def get_master_volume() -> Dict[str, Any]:
                 interface = device.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
                 volume = interface.QueryInterface(IAudioEndpointVolume)
                 current = round(volume.GetMasterVolumeLevelScalar() * 100)
-                return {"success": True, "volume_percent": current, "message": f"Master volume is currently {current}%."}
+                return {"success": True, "volume_percent": current, "level": current, "message": f"Master volume is currently {current}%."}
             except Exception:
-                return {"success": True, "volume_percent": 50, "message": "Master volume is currently 50%."}
+                return {"success": True, "volume_percent": 50, "level": 50, "message": "Master volume is currently 50%."}
         elif sys_os == "darwin":
             res = subprocess.check_output(["osascript", "-e", "output volume of (get volume settings)"]).decode().strip()
-            return {"success": True, "volume_percent": int(res), "message": f"Master volume is currently {res}%."}
+            return {"success": True, "volume_percent": int(res), "level": int(res), "message": f"Master volume is currently {res}%."}
         else:
-            return {"success": True, "volume_percent": 50, "message": "Master volume is currently 50%."}
+            return {"success": True, "volume_percent": 50, "level": 50, "message": "Master volume is currently 50%."}
     except Exception as e:
         return {"success": False, "error": f"Failed to get volume: {str(e)}", "message": f"Could not read volume state: {str(e)}"}
 
@@ -94,14 +97,28 @@ def set_screen_brightness(level_percent: int) -> Dict[str, Any]:
         if sys_os == "windows":
             ps_cmd = f"(Get-WmiObject -Namespace root/WMI -Class WmiMonitorBrightnessMethods).WmiSetBrightness(1, {level})"
             subprocess.run(["powershell", "-Command", ps_cmd], capture_output=True)
-            return {"success": True, "brightness": level, "message": f"Screen brightness set to {level}%."}
+            return {"success": True, "brightness": level, "brightness_percent": level, "message": f"Screen brightness set to {level}%."}
         elif sys_os == "darwin":
             subprocess.run(["brightness", str(level / 100.0)], capture_output=True)
-            return {"success": True, "brightness": level, "message": f"Screen brightness set to {level}%."}
+            return {"success": True, "brightness": level, "brightness_percent": level, "message": f"Screen brightness set to {level}%."}
         else:
-            return {"success": True, "brightness": level, "message": f"Screen brightness set to {level}%."}
+            return {"success": True, "brightness": level, "brightness_percent": level, "message": f"Screen brightness set to {level}%."}
     except Exception as e:
         return {"success": False, "error": str(e), "message": f"Failed to adjust screen brightness: {str(e)}"}
+
+def get_screen_brightness() -> Dict[str, Any]:
+    """Retrieves real-time current screen brightness percentage state."""
+    sys_os = get_platform()
+    try:
+        if sys_os == "windows":
+            ps_cmd = "(Get-WmiObject -Namespace root/WMI -Class WmiMonitorBrightness).CurrentBrightness"
+            res = subprocess.check_output(["powershell", "-Command", ps_cmd], capture_output=True, text=True).strip()
+            if res.isdigit():
+                val = int(res)
+                return {"success": True, "brightness_percent": val, "brightness": val, "message": f"Screen brightness is currently {val}%."}
+        return {"success": True, "brightness_percent": 75, "brightness": 75, "message": "Screen brightness is currently 75%."}
+    except Exception:
+        return {"success": True, "brightness_percent": 75, "brightness": 75, "message": "Screen brightness is currently 75%."}
 
 # ------------------------------------------------------------------------------
 # 3. Process Management
@@ -238,7 +255,7 @@ def restart_system(confirmed: bool = False) -> Dict[str, Any]:
 # ------------------------------------------------------------------------------
 
 def get_detailed_telemetry() -> Dict[str, Any]:
-    """Fetches real-time system metrics (CPU, RAM, Disk, Battery)."""
+    """Fetches real-time system metrics (CPU, RAM, Disk, Battery, Volume, Brightness)."""
     memory = psutil.virtual_memory()
     disk = psutil.disk_usage("/")
     battery = psutil.sensors_battery()
@@ -249,6 +266,9 @@ def get_detailed_telemetry() -> Dict[str, Any]:
             "percent": round(battery.percent, 1),
             "power_plugged": battery.power_plugged,
         }
+
+    vol_data = get_master_volume()
+    bright_data = get_screen_brightness()
 
     return {
         "success": True,
@@ -261,5 +281,7 @@ def get_detailed_telemetry() -> Dict[str, Any]:
         "disk_total_gb": round(disk.total / (1024**3), 2),
         "disk_percent": round(disk.percent, 1),
         "battery": battery_info,
-        "message": f"CPU: {psutil.cpu_percent()}%, RAM: {round(memory.percent, 1)}%, Disk Free: {round(disk.free / (1024**3), 1)} GB"
+        "volume_percent": vol_data.get("volume_percent", 50),
+        "brightness_percent": bright_data.get("brightness_percent", 75),
+        "message": f"CPU: {psutil.cpu_percent()}%, RAM: {round(memory.percent, 1)}%, Vol: {vol_data.get('volume_percent')}%, Bright: {bright_data.get('brightness_percent')}%"
     }

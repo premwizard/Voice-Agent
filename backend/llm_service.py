@@ -47,7 +47,9 @@ class LLMService:
             "You assist the user with tasks, computer control, system telemetry, and workflow automation. "
             "Keep responses direct, concise, helpful, and natural."
         )
-        active_sys_prompt = base_sys_prompt + ai_tool_caller.get_tool_system_instructions()
+        from memory.memory_manager import memory_manager
+        memory_context = memory_manager.get_active_memories_prompt()
+        active_sys_prompt = base_sys_prompt + memory_context + ai_tool_caller.get_tool_system_instructions()
 
         tool_spec, tool_result = ai_tool_caller.process_request(prompt, user_confirmed=user_confirmed)
 

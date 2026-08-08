@@ -7,6 +7,7 @@
 #                 - WebSocket (/ws/events) for real-time background task events & notifications.
 # ==============================================================================
 
+import io
 import json
 import asyncio
 from typing import Dict, Any, Optional, List
@@ -72,6 +73,19 @@ def execute_system_action(request: SystemActionRequest):
     action_args = request.args or {}
     result = tool_registry.execute(request.action, user_confirmed=request.user_confirmed or False, **action_args)
     return {"action": request.action, "result": result}
+
+# Neural TTS Voice Endpoint (Edge-TTS MP3 Audio Streaming)
+class TTSRequest(BaseModel):
+    text: str
+    voice: Optional[str] = "en-US-ChristopherNeural"
+
+@router.post("/voice/tts")
+async def generate_tts_endpoint(request: TTSRequest):
+    from tts_service import tts_service
+    audio_bytes = await tts_service.generate_speech_audio(request.text, request.voice)
+    if not audio_bytes:
+        return {"error": "Failed to generate TTS audio"}
+    return StreamingResponse(io.BytesIO(audio_bytes), media_type="audio/mpeg")
 
 # 1. High-Speed REST Command Endpoint (<50ms execution for local commands)
 @router.post("/commands")
