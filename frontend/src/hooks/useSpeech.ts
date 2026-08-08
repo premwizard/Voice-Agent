@@ -1,9 +1,9 @@
 // ==============================================================================
 // FILE: src/hooks/useSpeech.ts
 // WHAT THIS FILE IS: Auto-Sending Hands-Free Voice Speech Recognition & Synthesis Hook.
-// WHY IT IS USED: Automatically detects silence (pause in speech) and immediately 
-//                 transmits recorded voice text over WebSockets without clicking "Send",
-//                 preventing duplicate submissions and auto-restarting mic.
+// WHY IT IS USED: Includes Speech Tail Normalization (fixing "50% age" -> "50%"),
+//                 Barge-In Interruption (immediately stopping TTS when user speaks),
+//                 Request Deduplication, and an explicit Assistant State Machine.
 // ==============================================================================
 
 "use client";
@@ -17,10 +17,21 @@ declare global {
   }
 }
 
-export function useSpeech(onSpeechEnd?: (finalText: string) => void) {
-  const [isListening, setIsListening] = useState<boolean>(false);
+export type VoiceState = "IDLE" | "LISTENING" | "THINKING" | "EXECUTING" | "SPEAKING" | "INTERRUPTED" | "ERROR";
+
+export function normalizeSpeechTranscript(raw: string): string {
+  if (!raw) return "";
+  let cleaned = raw.trim();
+  // Fix Speech-To-Text tail noise artifacts
+  cleaned = cleaned.replace(/%\s*age\b/gi, "%");
+  cleaned = cleaned.replace(/percent\s*age\b/gi, "percent");
+  cleaned = cleaned.replace(/volume\s*to\s*(\d+)\s*%?\s*age\b/gi, "volume to $1%");
+  return cleaned;
+}
+
+export function useSpeech(onSpeechEnd?: (finalText: string, requestId: string) => void) {
+  const [voiceState, setVoiceState] = useState<VoiceState>("IDLE");
   const [transcript, setTranscript] = useState<string>("");
-  const [isSpeaking, setIsSpeaking] = useState<boolean>(false);
   const [isSupported, setIsSupported] = useState<boolean>(true);
   const [speechStatus, setSpeechStatus] = useState<string>("Click microphone to speak");
   const [audioLevel, setAudioLevel] = useState<number>(0);
@@ -34,11 +45,12 @@ export function useSpeech(onSpeechEnd?: (finalText: string) => void) {
   const spokenIndexRef = useRef<number>(0);
   const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const restartTimerRef = useRef<NodeJS.Timeout | null>(null);
+  
   const isSpeakingRef = useRef<boolean>(false);
   const isHandsFreeRef = useRef<boolean>(true);
   const isSubmittingRef = useRef<boolean>(false);
 
-  // Audio Context & Analyser refs
+  // Audio Analyser refs
   const audioCtxRef = useRef<AudioContext | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const animFrameRef = useRef<number | null>(null);
@@ -69,37 +81,51 @@ export function useSpeech(onSpeechEnd?: (finalText: string) => void) {
   }, [onSpeechEnd]);
 
   useEffect(() => {
-    isSpeakingRef.current = isSpeaking;
-  }, [isSpeaking]);
-
-  useEffect(() => {
     isHandsFreeRef.current = isHandsFreeContinuous;
   }, [isHandsFreeContinuous]);
 
-  // Submit final transcript once per speech turn
+  // Barge-in interruption handler
+  const interruptTTS = useCallback(() => {
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+    }
+    isSpeakingRef.current = false;
+    spokenIndexRef.current = 0;
+    setVoiceState("INTERRUPTED");
+    setAudioLevel(0);
+  }, []);
+
+  // Submit final transcript once per speech turn with request_id deduplication
   const autoSubmitTranscript = useCallback(() => {
-    const finalRecordedText = transcriptRef.current.trim();
+    const rawText = transcriptRef.current;
+    const finalRecordedText = normalizeSpeechTranscript(rawText);
+    
     if (finalRecordedText && onSpeechEndRef.current && !isSubmittingRef.current) {
       isSubmittingRef.current = true;
-      console.log("Auto-submitting spoken text:", finalRecordedText);
+      const requestId = `req_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+      console.log("Auto-submitting normalized spoken text:", finalRecordedText, "ReqID:", requestId);
+      
+      setVoiceState("THINKING");
       setSpeechStatus(`Sent: "${finalRecordedText}"`);
-      onSpeechEndRef.current(finalRecordedText);
+      onSpeechEndRef.current(finalRecordedText, requestId);
+      
       setTranscript("");
       transcriptRef.current = "";
       
       setTimeout(() => {
         isSubmittingRef.current = false;
-      }, 1200);
+      }, 1000);
     }
   }, []);
 
-  // Check browser support on mount
+  // Check browser support
   useEffect(() => {
     if (typeof window !== "undefined") {
       const hasSupport = !!(window.SpeechRecognition || window.webkitSpeechRecognition);
       setIsSupported(hasSupport);
       if (!hasSupport) {
         setSpeechStatus("Web Speech API not supported in this browser");
+        setVoiceState("ERROR");
       }
     }
   }, []);
@@ -123,7 +149,6 @@ export function useSpeech(onSpeechEnd?: (finalText: string) => void) {
       }
     }
     cleanupAudioAnalyser();
-    setIsListening(false);
     autoSubmitTranscript();
   }, [autoSubmitTranscript, cleanupAudioAnalyser]);
 
@@ -135,11 +160,13 @@ export function useSpeech(onSpeechEnd?: (finalText: string) => void) {
     if (!SpeechRecognitionClass) {
       setIsSupported(false);
       setSpeechStatus("Web Speech API not supported");
+      setVoiceState("ERROR");
       return;
     }
 
+    // BARGE-IN: If Phoenix is currently speaking, immediately interrupt TTS playback
     if (isSpeakingRef.current) {
-      return;
+      interruptTTS();
     }
 
     try {
@@ -154,7 +181,7 @@ export function useSpeech(onSpeechEnd?: (finalText: string) => void) {
       recognition.lang = "en-US";
 
       recognition.onstart = () => {
-        setIsListening(true);
+        setVoiceState("LISTENING");
         setSpeechStatus("🎙️ Listening... Speak now!");
 
         if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
@@ -182,6 +209,12 @@ export function useSpeech(onSpeechEnd?: (finalText: string) => void) {
                 const avg = sum / dataArray.length;
                 const normalized = Math.min(1, Math.max(0, avg / 100));
                 setAudioLevel(normalized);
+
+                // Barge-In Trigger: If audio volume > threshold while TTS is playing, interrupt
+                if (normalized > 0.25 && isSpeakingRef.current) {
+                  interruptTTS();
+                }
+
                 animFrameRef.current = requestAnimationFrame(sampleVolume);
               };
               sampleVolume();
@@ -191,23 +224,30 @@ export function useSpeech(onSpeechEnd?: (finalText: string) => void) {
       };
 
       recognition.onresult = (event: any) => {
+        // If TTS is speaking, interrupt it instantly as soon as speech is detected
+        if (isSpeakingRef.current) {
+          interruptTTS();
+        }
+
         let currentTranscript = "";
         for (let i = 0; i < event.results.length; i++) {
           currentTranscript += event.results[i][0].transcript;
         }
 
-        const lowerText = currentTranscript.toLowerCase().trim();
-        let cleanedPrompt = currentTranscript;
+        const normalizedText = normalizeSpeechTranscript(currentTranscript);
+        const lowerText = normalizedText.toLowerCase().trim();
+        let cleanedPrompt = normalizedText;
 
         if (lowerText === "phoenix" || lowerText === "hey phoenix" || lowerText === "hi phoenix") {
           cleanedPrompt = "Hey Phoenix";
         } else if (lowerText.startsWith("phoenix") || lowerText.startsWith("hey phoenix") || lowerText.startsWith("hi phoenix")) {
-          cleanedPrompt = currentTranscript.replace(/^(hey\s+|hi\s+)?phoenix[,!]?\s*/i, "");
+          cleanedPrompt = normalizedText.replace(/^(hey\s+|hi\s+)?phoenix[,!]?\s*/i, "");
           if (!cleanedPrompt.trim()) cleanedPrompt = "Hey Phoenix";
         }
 
         setTranscript(cleanedPrompt);
         if (cleanedPrompt.trim()) {
+          setVoiceState("LISTENING");
           setSpeechStatus(`Speaking: "${cleanedPrompt}"`);
         }
 
@@ -215,37 +255,39 @@ export function useSpeech(onSpeechEnd?: (finalText: string) => void) {
           clearTimeout(silenceTimerRef.current);
         }
 
+        // End-of-speech VAD silence buffer (900ms) for natural submission
         if (cleanedPrompt.trim()) {
           silenceTimerRef.current = setTimeout(() => {
             stopListening();
-          }, 1000);
+          }, 900);
         }
       };
 
       recognition.onend = () => {
         cleanupAudioAnalyser();
-        setIsListening(false);
         autoSubmitTranscript();
 
         if (isHandsFreeRef.current && !isSpeakingRef.current) {
           if (restartTimerRef.current) clearTimeout(restartTimerRef.current);
           restartTimerRef.current = setTimeout(() => {
             startListening();
-          }, 600);
+          }, 500);
+        } else if (!isSpeakingRef.current) {
+          setVoiceState("IDLE");
         }
       };
 
       recognition.onerror = (event: any) => {
         cleanupAudioAnalyser();
-        setIsListening(false);
         if (event.error === "no-speech") {
           setSpeechStatus("Listening...");
           if (isHandsFreeRef.current && !isSpeakingRef.current) {
             if (restartTimerRef.current) clearTimeout(restartTimerRef.current);
-            restartTimerRef.current = setTimeout(() => startListening(), 800);
+            restartTimerRef.current = setTimeout(() => startListening(), 700);
           }
         } else {
           setSpeechStatus(`Speech error: ${event.error}`);
+          setVoiceState("ERROR");
         }
       };
 
@@ -253,10 +295,10 @@ export function useSpeech(onSpeechEnd?: (finalText: string) => void) {
       recognition.start();
     } catch (err) {
       cleanupAudioAnalyser();
-      setIsListening(false);
+      setVoiceState("ERROR");
       setSpeechStatus("Failed to start speech recognition");
     }
-  }, [autoSubmitTranscript, stopListening, cleanupAudioAnalyser]);
+  }, [autoSubmitTranscript, stopListening, cleanupAudioAnalyser, interruptTTS]);
 
   useEffect(() => {
     return () => {
@@ -266,7 +308,7 @@ export function useSpeech(onSpeechEnd?: (finalText: string) => void) {
     };
   }, [cleanupAudioAnalyser]);
 
-  // Speech synthesis chunk player
+  // Speech synthesis utterance chunk player
   const speakUtteranceChunk = useCallback((text: string) => {
     if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
     if (!text.trim()) return;
@@ -277,7 +319,7 @@ export function useSpeech(onSpeechEnd?: (finalText: string) => void) {
     utterance.pitch = 1.0;
 
     utterance.onstart = () => {
-      setIsSpeaking(true);
+      setVoiceState("SPEAKING");
       isSpeakingRef.current = true;
       setAudioLevel(0.6);
       if (recognitionRef.current) {
@@ -287,24 +329,24 @@ export function useSpeech(onSpeechEnd?: (finalText: string) => void) {
 
     utterance.onend = () => {
       if (!window.speechSynthesis.speaking) {
-        setIsSpeaking(false);
+        setVoiceState("IDLE");
         isSpeakingRef.current = false;
         setAudioLevel(0);
 
         if (isHandsFreeRef.current) {
           setTimeout(() => {
             startListening();
-          }, 400);
+          }, 350);
         }
       }
     };
 
     utterance.onerror = () => {
-      setIsSpeaking(false);
+      setVoiceState("IDLE");
       isSpeakingRef.current = false;
       setAudioLevel(0);
       if (isHandsFreeRef.current) {
-        setTimeout(() => startListening(), 400);
+        setTimeout(() => startListening(), 350);
       }
     };
 
@@ -339,23 +381,15 @@ export function useSpeech(onSpeechEnd?: (finalText: string) => void) {
   }, [speakUtteranceChunk]);
 
   const resetTTSBuffer = useCallback(() => {
-    spokenIndexRef.current = 0;
-    if (silenceTimerRef.current) {
-      clearTimeout(silenceTimerRef.current);
-      silenceTimerRef.current = null;
-    }
-    if (typeof window !== "undefined" && "speechSynthesis" in window) {
-      window.speechSynthesis.cancel();
-    }
-    setIsSpeaking(false);
-    isSpeakingRef.current = false;
-    setAudioLevel(0);
-  }, []);
+    interruptTTS();
+    setVoiceState("IDLE");
+  }, [interruptTTS]);
 
   return {
-    isListening,
+    voiceState,
+    isListening: voiceState === "LISTENING",
+    isSpeaking: voiceState === "SPEAKING",
     transcript,
-    isSpeaking,
     isSupported,
     speechStatus,
     audioLevel,
@@ -368,6 +402,7 @@ export function useSpeech(onSpeechEnd?: (finalText: string) => void) {
     speakUtteranceChunk,
     processStreamingTTS,
     resetTTSBuffer,
+    interruptTTS,
     setTranscript,
   };
 }

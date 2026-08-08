@@ -1,26 +1,39 @@
 # ==============================================================================
-# FILE: router.py
-# WHAT THIS FILE IS: API Router Module for HTTP Endpoints and WebSockets.
-# WHY IT IS USED: Exposes system endpoints, telemetry metrics, system tool execution,
-#                 and real-time WebSocket streaming with tool calling support.
+# FILE: backend/router.py
+# WHAT THIS FILE IS: API Router Module supporting REST, SSE Streaming, and WebSockets.
+# WHY IT IS USED: Provides a multi-channel hybrid architecture:
+#                 - REST (/commands, /system/action) for fast local tool calls (<50ms)
+#                 - SSE (/chat/stream) for token-by-token AI response streaming
+#                 - WebSocket (/ws/events) for real-time background task events & notifications.
 # ==============================================================================
 
 import json
-from typing import Dict, Any, Optional
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+import asyncio
+from typing import Dict, Any, Optional, List
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Request
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from config import settings
 from websocket_manager import manager
 from llm_service import llm_service
 from tools.tool_registry import tool_registry
 from tools.system_control import get_detailed_telemetry
+from core.command_router import command_router
 
-# Create APIRouter instance with prefix '/api/v1'
+# Create APIRouter instance
 router = APIRouter(prefix="/api/v1", tags=["system"])
 
-# Define Pydantic models for API request bodies
+# Request models
+class CommandRequest(BaseModel):
+    prompt: str
+    request_id: Optional[str] = None
+    user_confirmed: Optional[bool] = False
+
 class ChatRequest(BaseModel):
     prompt: str
+    history: Optional[List[Dict[str, str]]] = None
+    model: Optional[str] = None
+    system_prompt: Optional[str] = None
     user_confirmed: Optional[bool] = False
 
 class SystemActionRequest(BaseModel):
@@ -28,7 +41,10 @@ class SystemActionRequest(BaseModel):
     args: Optional[Dict[str, Any]] = None
     user_confirmed: Optional[bool] = False
 
-# GET route for health check
+# Deduplication cache for request_id to prevent double submissions
+PROCESSED_REQUEST_IDS: set = set()
+
+# Health check
 @router.get("/health")
 def get_health():
     return {
@@ -37,7 +53,7 @@ def get_health():
         "ai_provider": settings.AI_PROVIDER
     }
 
-# GET route for public config
+# Public config
 @router.get("/config/public")
 def get_public_config():
     return {
@@ -45,48 +61,75 @@ def get_public_config():
         "environment": settings.ENVIRONMENT
     }
 
-# GET endpoint for real-time telemetry
+# System telemetry
 @router.get("/system/telemetry")
 def get_telemetry_endpoint():
-    """Returns real-time system metrics (CPU, RAM, Disk, Battery)."""
     return get_detailed_telemetry()
 
-# POST endpoint to execute direct system control actions
+# Direct System Action
 @router.post("/system/action")
 def execute_system_action(request: SystemActionRequest):
-    """Executes a system control tool by action name with permission checks."""
     action_args = request.args or {}
     result = tool_registry.execute(request.action, user_confirmed=request.user_confirmed or False, **action_args)
     return {"action": request.action, "result": result}
 
-# POST REST endpoint for testing AI response
-@router.post("/chat")
-async def rest_chat(request: ChatRequest):
+# 1. High-Speed REST Command Endpoint (<50ms execution for local commands)
+@router.post("/commands")
+def execute_command_endpoint(request: CommandRequest):
     """
-    HTTP POST REST endpoint to test AI response directly.
+    Fast-Path REST Command execution.
+    If intent is local (volume, brightness, launch app, stats), executes immediately
+    and returns in <50ms without waiting for LLM network latency.
     """
-    response_tokens = []
-    async for token_chunk in llm_service.stream_response(request.prompt, user_confirmed=request.user_confirmed or False):
-        response_tokens.append(token_chunk)
-    
-    full_response = "".join(response_tokens)
-    return {
-        "prompt": request.prompt,
-        "ai_provider": settings.AI_PROVIDER,
-        "model": settings.OPENROUTER_MODEL,
-        "response": full_response
-    }
+    # Deduplicate request_id
+    if request.request_id:
+        if request.request_id in PROCESSED_REQUEST_IDS:
+            return {"status": "ignored", "reason": "Duplicate request_id"}
+        PROCESSED_REQUEST_IDS.add(request.request_id)
+        if len(PROCESSED_REQUEST_IDS) > 1000:
+            PROCESSED_REQUEST_IDS.clear()
 
-# WebSocket endpoint for real-time bi-directional streaming
-@router.websocket("/ws/stream")
-async def websocket_chat_endpoint(websocket: WebSocket):
+    routed_res = command_router.classify_and_route(request.prompt, user_confirmed=request.user_confirmed or False)
+    return routed_res
+
+# 2. Server-Sent Events (SSE) AI Response Streaming Endpoint
+@router.post("/chat/stream")
+async def sse_chat_stream_endpoint(request: ChatRequest):
     """
-    Real-time WebSocket endpoint that accepts client connections and streams AI text tokens.
+    Streams AI response text tokens progressively over Server-Sent Events (SSE).
+    """
+    async def sse_generator():
+        try:
+            async for token_chunk in llm_service.stream_response(
+                request.prompt, 
+                history=request.history, 
+                model=request.model, 
+                system_prompt=request.system_prompt, 
+                user_confirmed=request.user_confirmed or False
+            ):
+                payload = json.dumps({"token": token_chunk})
+                yield f"data: {payload}\n\n"
+            
+            yield "data: [DONE]\n\n"
+        except Exception as e:
+            err_payload = json.dumps({"error": str(e)})
+            yield f"data: {err_payload}\n\n"
+
+    return StreamingResponse(sse_generator(), media_type="text/event-stream")
+
+# 3. Real-Time Events WebSocket Endpoint (Task Progress, Notifications, Live State)
+@router.websocket("/ws/events")
+@router.websocket("/ws/stream")
+async def websocket_events_endpoint(websocket: WebSocket):
+    """
+    WebSocket dedicated to live background events, notifications, and real-time state broadcasts.
     """
     await manager.connect(websocket)
-    
     try:
-        await manager.send_personal_message("Connected to Voice Agent AI WebSocket server!", websocket)
+        await manager.send_personal_message(json.dumps({
+            "event": "connected",
+            "message": "Connected to Phoenix AI Events WebSocket stream."
+        }), websocket)
         
         while True:
             raw_data = await websocket.receive_text()
@@ -113,5 +156,6 @@ async def websocket_chat_endpoint(websocket: WebSocket):
                 await manager.send_personal_message(token_chunk, websocket)
             
             await manager.send_personal_message("[END_OF_STREAM]", websocket)
+
     except WebSocketDisconnect:
         manager.disconnect(websocket)

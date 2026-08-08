@@ -34,19 +34,13 @@ def set_master_volume(level_percent: int) -> Dict[str, Any]:
             try:
                 import ctypes
                 ctypes.windll.ole32.CoInitialize(None)
-                from pycaw.pycaw import AudioUtilities
-                devices = AudioUtilities.GetAllDevices()
-                updated_count = 0
-                for dev in devices:
-                    name = dev.FriendlyName.lower() if dev.FriendlyName else ""
-                    if "microphone" not in name and "mic" not in name:
-                        try:
-                            vol = dev.EndpointVolume
-                            if vol:
-                                vol.SetMasterVolumeLevelScalar(level / 100.0, None)
-                                updated_count += 1
-                        except Exception:
-                            pass
+                from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
+                from comtypes import CLSCTX_ALL
+                
+                device = AudioUtilities.GetSpeakers()
+                interface = device.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
+                volume = interface.QueryInterface(IAudioEndpointVolume)
+                volume.SetMasterVolumeLevelScalar(level / 100.0, None)
                 return {"success": True, "message": f"Master volume set to {level}%", "level": level}
             except Exception as w_err:
                 # WScript SendKeys fallback if PyCaw fails
@@ -69,19 +63,14 @@ def get_master_volume() -> Dict[str, Any]:
             try:
                 import ctypes
                 ctypes.windll.ole32.CoInitialize(None)
-                from pycaw.pycaw import AudioUtilities
-                devices = AudioUtilities.GetAllDevices()
-                for dev in devices:
-                    name = dev.FriendlyName.lower() if dev.FriendlyName else ""
-                    if "microphone" not in name and "mic" not in name:
-                        try:
-                            vol = dev.EndpointVolume
-                            if vol:
-                                current = round(vol.GetMasterVolumeLevelScalar() * 100)
-                                return {"success": True, "volume_percent": current, "message": f"Master volume is currently {current}%."}
-                        except Exception:
-                            pass
-                return {"success": True, "volume_percent": 50, "message": "Master volume is currently 50%."}
+                from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
+                from comtypes import CLSCTX_ALL
+                
+                device = AudioUtilities.GetSpeakers()
+                interface = device.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
+                volume = interface.QueryInterface(IAudioEndpointVolume)
+                current = round(volume.GetMasterVolumeLevelScalar() * 100)
+                return {"success": True, "volume_percent": current, "message": f"Master volume is currently {current}%."}
             except Exception:
                 return {"success": True, "volume_percent": 50, "message": "Master volume is currently 50%."}
         elif sys_os == "darwin":

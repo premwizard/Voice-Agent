@@ -1,16 +1,16 @@
 // ==============================================================================
 // FILE: src/app/page.tsx
 // WHAT THIS FILE IS: Next.js Real-Time Voice Agent & Phase 2 System Dashboard.
-// WHY IT IS USED: Combines REST health checks, WebSockets streaming, Speech-to-Text (STT), 
-//                 real-time streaming Text-to-Speech (TTS), Canvas Visualizer, 
-//                 System Telemetry, and Computer Control into a full Studio interface.
+// WHY IT IS USED: Combines REST fast-path command execution (<50ms), SSE streaming,
+//                 WebSocket event listeners, Speech-to-Text (STT) with barge-in interruption,
+//                 streaming TTS, canvas visualizer, system telemetry, and controls.
 // ==============================================================================
 
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { fetchServerHealth, HealthStatus } from "@/services/apiService";
-import { useWebSocket } from "@/hooks/useWebSocket";
+import { commsManager, CommandResult } from "@/services/communicationManager";
 import { useSpeech } from "@/hooks/useSpeech";
 import AudioVisualizer from "@/components/AudioVisualizer";
 import CanvasAudioOrb from "@/components/CanvasAudioOrb";
@@ -35,7 +35,8 @@ import {
   Monitor,
   SlidersHorizontal,
   MessageSquare,
-  Repeat
+  Repeat,
+  Zap
 } from "lucide-react";
 
 const AI_MODELS = [
@@ -49,22 +50,12 @@ const PERSONALITIES = [
   { 
     id: "default", 
     name: "🎙️ Natural", 
-    prompt: "Your name is Phoenix. You are a real-time, highly intelligent AI personal assistant inspired by Jarvis with system control capabilities. When the user addresses you by name ('Phoenix' or 'Hey Phoenix'), respond attentively and warmly as the assistant (e.g. 'Yes! I am here. How can I assist you?'). Do NOT answer about the city of Phoenix, Arizona unless specifically asked about Arizona or geography." 
+    prompt: "Your name is Phoenix. You are a real-time, highly intelligent AI personal assistant inspired by Jarvis with system control capabilities." 
   },
   { 
     id: "concise", 
     name: "⚡ Quick & Crisp", 
-    prompt: "Your name is Phoenix, a rapid Jarvis-style voice assistant. Answer in 1-2 ultra-short sentences max. If called by name ('Phoenix'), acknowledge immediately and concisely." 
-  },
-  { 
-    id: "developer", 
-    name: "🧑‍💻 Tech Expert", 
-    prompt: "Your name is Phoenix, an expert software engineer voice assistant with workstation tools. Provide precise, technical answers." 
-  },
-  { 
-    id: "friendly", 
-    name: "🎭 Warm Companion", 
-    prompt: "Your name is Phoenix, a warm, friendly voice companion. Greet and respond cheerfully when addressed." 
+    prompt: "Your name is Phoenix, a rapid Jarvis-style voice assistant. Answer in 1-2 ultra-short sentences max." 
   },
 ];
 
@@ -79,29 +70,97 @@ export default function Home() {
   const [selectedModel, setSelectedModel] = useState<string>("meta-llama/llama-3.3-70b-instruct");
   const [selectedPersonality, setSelectedPersonality] = useState<string>("default");
 
-  const { isConnected, currentStream, isStreaming, sendMessage } = useWebSocket();
-  const prevStreamRef = useRef<string>("");
+  const [currentStream, setCurrentStream] = useState<string>("");
+  const [isStreaming, setIsStreaming] = useState<boolean>(false);
+  const [lastLatency, setLastLatency] = useState<number | null>(null);
+  const [wsActive, setWsActive] = useState<boolean>(true);
+
   const currentSysPrompt = PERSONALITIES.find((p) => p.id === selectedPersonality)?.prompt;
 
-  const handleSpeechEnd = useCallback(
-    (finalText: string) => {
-      if (finalText) {
-        const userMsg: MessageItem = {
-          id: Date.now().toString(),
-          role: "user",
-          content: finalText,
+  // Process User Request via Hybrid Communication Architecture (REST Fast Path or SSE Stream)
+  const processUserPrompt = useCallback(
+    async (userText: string, requestId?: string) => {
+      if (!userText.trim()) return;
+
+      const userMsg: MessageItem = {
+        id: requestId || Date.now().toString(),
+        role: "user",
+        content: userText,
+        timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      };
+
+      setMessages((prev) => [...prev, userMsg]);
+      setCurrentStream("");
+      setIsStreaming(true);
+
+      const startTime = performance.now();
+
+      // 1. Try High-Speed REST Command Fast-Path Router (<50ms execution)
+      const commandRes: CommandResult = await commsManager.executeCommand(userText, requestId);
+      const elapsedMs = Math.round(performance.now() - startTime);
+
+      if (commandRes.route === "FAST_PATH" && commandRes.executed) {
+        setLastLatency(commandRes.latency_metrics?.total_latency_ms || elapsedMs);
+        const replyText = commandRes.message;
+        
+        setCurrentStream(replyText);
+        setIsStreaming(false);
+
+        const assistantMsg: MessageItem = {
+          id: (Date.now() + 1).toString(),
+          role: "assistant",
+          content: replyText,
           timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
         };
+        setMessages((prev) => [...prev, assistantMsg]);
+        return;
+      }
 
-        sendMessage(finalText, messages, { model: selectedModel, systemPrompt: currentSysPrompt });
-        setMessages((prev) => [...prev, userMsg]);
+      // 2. Fall back to Server-Sent Events (SSE) streaming for AI Conversation
+      let fullText = "";
+      await commsManager.streamChatResponse(
+        userText,
+        messages.map((m) => ({ role: m.role, content: m.content })),
+        selectedModel,
+        false,
+        (token) => {
+          fullText += token;
+          setCurrentStream((prev) => prev + token);
+        },
+        () => {
+          const totalMs = Math.round(performance.now() - startTime);
+          setLastLatency(totalMs);
+          setIsStreaming(false);
+
+          const assistantMsg: MessageItem = {
+            id: (Date.now() + 1).toString(),
+            role: "assistant",
+            content: fullText,
+            timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          };
+          setMessages((prev) => [...prev, assistantMsg]);
+        },
+        (err) => {
+          console.error("Streaming error:", err);
+          setIsStreaming(false);
+        }
+      );
+    },
+    [messages, selectedModel]
+  );
+
+  const handleSpeechEnd = useCallback(
+    (finalText: string, requestId: string) => {
+      if (finalText) {
+        processUserPrompt(finalText, requestId);
         setInputPrompt("");
       }
     },
-    [sendMessage, selectedModel, currentSysPrompt]
+    [processUserPrompt]
   );
 
   const {
+    voiceState,
     isListening,
     transcript,
     isSpeaking,
@@ -117,12 +176,19 @@ export default function Home() {
     processStreamingTTS,
     resetTTSBuffer,
     speakUtteranceChunk,
+    interruptTTS
   } = useSpeech(handleSpeechEnd);
 
   useEffect(() => {
     fetchServerHealth()
       .then((data) => setHealth(data))
       .catch((err) => console.error("Health check failed:", err));
+
+    const unsubscribe = commsManager.subscribeEvents((event) => {
+      setWsActive(commsManager.isWebSocketConnected());
+    });
+
+    return () => unsubscribe();
   }, []);
 
   useEffect(() => {
@@ -136,61 +202,22 @@ export default function Home() {
       if (!isMuted) {
         processStreamingTTS(currentStream, !isStreaming);
       }
-      prevStreamRef.current = currentStream;
     }
   }, [currentStream, isStreaming, processStreamingTTS, isMuted]);
-
-  useEffect(() => {
-    if (!isStreaming && prevStreamRef.current) {
-      const assistantMsg: MessageItem = {
-        id: (Date.now() + 1).toString(),
-        role: "assistant",
-        content: prevStreamRef.current,
-        timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-      };
-      setMessages((prev) => {
-        if (prev.length > 0 && prev[prev.length - 1].content === prevStreamRef.current) {
-          return prev;
-        }
-        return [...prev, assistantMsg];
-      });
-      prevStreamRef.current = "";
-    }
-  }, [isStreaming]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputPrompt.trim()) return;
 
     const userText = inputPrompt.trim();
-
-    const userMsg: MessageItem = {
-      id: Date.now().toString(),
-      role: "user",
-      content: userText,
-      timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-    };
-
-    sendMessage(userText, messages, { model: selectedModel, systemPrompt: currentSysPrompt });
-    setMessages((prev) => [...prev, userMsg]);
-
     resetTTSBuffer();
+    processUserPrompt(userText);
     setInputPrompt("");
   };
 
   const handleSelectPrompt = (promptText: string) => {
-    setInputPrompt(promptText);
     resetTTSBuffer();
-    
-    const userMsg: MessageItem = {
-      id: Date.now().toString(),
-      role: "user",
-      content: promptText,
-      timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-    };
-
-    sendMessage(promptText, messages, { model: selectedModel, systemPrompt: currentSysPrompt });
-    setMessages((prev) => [...prev, userMsg]);
+    processUserPrompt(promptText);
     setInputPrompt("");
   };
 
@@ -216,18 +243,26 @@ export default function Home() {
                 Phoenix AI Assistant
               </h1>
               <span className="px-2 py-0.5 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-[10px] font-semibold tracking-wider">
-                v2.5 JARVIS
+                v2.5 Hybrid
               </span>
             </div>
             <p className="text-xs text-slate-400 hidden sm:block">
-              Jarvis Assistant • Hands-Free Continuous Voice • OpenRouter LLM
+              Jarvis Assistant • REST Fast Path + SSE Stream • Barge-in Audio
             </p>
           </div>
         </div>
 
         {/* Status Indicators & Settings Controls */}
         <div className="flex items-center space-x-2.5">
-          {/* Hands-Free Continuous Auto-Listen Toggle */}
+          {/* Latency Indicator */}
+          {lastLatency !== null && (
+            <div className="px-2.5 py-1 rounded-xl bg-indigo-950/80 border border-indigo-500/30 text-indigo-300 text-[11px] font-mono flex items-center gap-1">
+              <Zap className="w-3 h-3 text-amber-400" />
+              <span>{lastLatency}ms</span>
+            </div>
+          )}
+
+          {/* Hands-Free Auto-Listen Toggle */}
           <button
             onClick={() => {
               const nextState = !isHandsFreeContinuous;
@@ -239,24 +274,10 @@ export default function Home() {
                 ? "bg-emerald-950/60 border-emerald-500/50 text-emerald-300 shadow-emerald-950/30"
                 : "bg-slate-900 border-slate-800 text-slate-400"
             }`}
-            title="Hands-Free Continuous Auto-Listen (Mic stays open automatically)"
+            title="Hands-Free Continuous Auto-Listen"
           >
             <Repeat className={`w-3.5 h-3.5 ${isHandsFreeContinuous ? "text-emerald-400 animate-spin-slow" : "text-slate-500"}`} />
             <span className="hidden sm:inline">{isHandsFreeContinuous ? "Auto-Listen ON" : "Manual Mic"}</span>
-          </button>
-
-          {/* Wake Word Phoenix Toggle */}
-          <button
-            onClick={() => setIsWakeWordActive(!isWakeWordActive)}
-            className={`px-3 py-1.5 rounded-xl border transition text-[11px] font-mono flex items-center gap-1.5 ${
-              isWakeWordActive
-                ? "bg-amber-950/60 border-amber-500/50 text-amber-300 shadow-amber-950/30"
-                : "bg-slate-900 border-slate-800 text-slate-400"
-            }`}
-            title="Wake Word Listener ('Phoenix')"
-          >
-            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-            <span className="hidden sm:inline">{isWakeWordActive ? "Wake: 'Phoenix'" : "Wake Off"}</span>
           </button>
 
           {/* Mute Audio Button */}
@@ -273,11 +294,11 @@ export default function Home() {
             <span className="hidden md:inline">{isMuted ? "Muted" : "Audio On"}</span>
           </button>
 
-          {/* WebSocket Badge */}
+          {/* Hybrid Status Badge */}
           <div className="flex items-center space-x-2 text-xs px-3.5 py-1.5 rounded-xl bg-slate-900/90 border border-slate-800">
-            <Wifi className={`w-3.5 h-3.5 ${isConnected ? "text-emerald-400 animate-pulse" : "text-amber-400"}`} />
+            <Wifi className={`w-3.5 h-3.5 ${wsActive ? "text-emerald-400" : "text-amber-400"}`} />
             <span className="text-slate-200 font-mono text-[11px] font-medium hidden sm:inline">
-              {isConnected ? "WS ACTIVE" : "CONNECTING..."}
+              REST + SSE ACTIVE
             </span>
           </div>
         </div>
@@ -355,10 +376,12 @@ export default function Home() {
               <div className="-mt-4 z-10">
                 <div
                   className={`px-5 py-2 rounded-full text-xs font-semibold tracking-wide flex items-center gap-2 border shadow-2xl backdrop-blur-xl transition-all duration-300 ${
-                    isListening
+                    voiceState === "LISTENING"
                       ? "bg-rose-950/80 border-rose-700/80 text-rose-300 shadow-rose-950/50 scale-105"
-                      : isSpeaking
+                      : voiceState === "SPEAKING"
                       ? "bg-purple-950/80 border-purple-700/80 text-purple-300 shadow-purple-950/50 scale-105"
+                      : voiceState === "INTERRUPTED"
+                      ? "bg-amber-950/80 border-amber-700/80 text-amber-300 shadow-amber-950/50 scale-105"
                       : isStreaming
                       ? "bg-indigo-950/80 border-indigo-700/80 text-indigo-300 shadow-indigo-950/50 scale-105"
                       : "bg-slate-900/90 border-slate-800 text-slate-300"
@@ -366,14 +389,14 @@ export default function Home() {
                 >
                   <Activity className={`w-4 h-4 ${isListening || isSpeaking || isStreaming ? "animate-spin-slow" : ""}`} />
                   <span>
-                    {isListening
-                      ? "Listening... Speak now (Hands-free active)"
-                      : isSpeaking
-                      ? "🔊 Phoenix speaking..."
+                    {voiceState === "LISTENING"
+                      ? "Listening... (Barge-in active)"
+                      : voiceState === "SPEAKING"
+                      ? "🔊 Phoenix speaking... (Speak to interrupt)"
+                      : voiceState === "INTERRUPTED"
+                      ? "⚡ Interrupted! Listening to new command..."
                       : isStreaming
                       ? "⚡ Processing response..."
-                      : isHandsFreeContinuous
-                      ? "Hands-free active • Say 'Phoenix' to talk"
                       : "Ready! Click Mic or type below"}
                   </span>
                 </div>
@@ -504,7 +527,7 @@ export default function Home() {
       </div>
 
       <footer className="w-full max-w-5xl mx-auto text-center text-[11px] text-slate-500 font-mono py-2 z-10">
-        Next.js App Router • FastAPI WebSockets • Phoenix AI Jarvis Voice Engine
+        Next.js App Router • REST Fast Path + SSE Stream • Phoenix AI Voice Engine
       </footer>
     </main>
   );
