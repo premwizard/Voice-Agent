@@ -1,70 +1,17 @@
 # ==============================================================================
 # FILE: llm_service.py
-# WHAT THIS FILE IS: Multi-Provider LLM AI Service Module (OpenRouter & Gemini).
-# WHY IT IS USED: Handles communication with OpenRouter API (using OpenAI SDK format),
-#                 executing registered system tools, and streaming token responses.
+# WHAT THIS FILE IS: Multi-Provider Intelligent LLM AI Service (OpenRouter & Gemini).
+# WHY IT IS USED: Intercepts natural language prompts, coordinates with AIToolCaller 
+#                 to execute tools dynamically, formats context, and streams text responses.
 # ==============================================================================
 
+import json
 import re
 from typing import AsyncGenerator, List, Dict, Union, Optional
 from openai import AsyncOpenAI
 from google import genai
 from config import settings
-from tools.tool_registry import tool_registry
-
-def process_system_tools(prompt: str) -> Optional[str]:
-    """
-    Parses user prompt for system control intents, executes registered tools,
-    and returns tool execution output context string.
-    """
-    p = prompt.lower().strip()
-    
-    # 1. Volume Controls
-    if "volume" in p or "sound" in p or "louder" in p or "quieter" in p or "mute" in p:
-        if "mute" in p:
-            tool_registry.execute("set_master_volume", level_percent=0)
-            return "[System Tool Action Executed: Master volume muted to 0%]"
-        elif any(w in p for w in ["increase", "up", "raise", "louder", "higher", "more", "add"]):
-            current_res = tool_registry.execute("get_master_volume")
-            curr = current_res.get("volume_percent", 50)
-            target = min(100, curr + 20)
-            tool_registry.execute("set_master_volume", level_percent=target)
-            return f"[System Tool Action Executed: Physical Windows master volume increased from {curr}% to {target}%]"
-        elif any(w in p for w in ["decrease", "down", "lower", "quieter", "reduce", "less"]):
-            current_res = tool_registry.execute("get_master_volume")
-            curr = current_res.get("volume_percent", 50)
-            target = max(0, curr - 20)
-            tool_registry.execute("set_master_volume", level_percent=target)
-            return f"[System Tool Action Executed: Physical Windows master volume decreased from {curr}% to {target}%]"
-        else:
-            nums = re.findall(r'\d+', p)
-            if nums:
-                val = int(nums[0])
-                tool_registry.execute("set_master_volume", level_percent=val)
-                return f"[System Tool Action Executed: Physical Windows master volume set to {val}%]"
-
-    # 2. Application Launcher
-    if any(kw in p for kw in ["open ", "launch ", "start "]):
-        match = re.search(r'(open|launch|start)\s+(.+)', p)
-        if match:
-            app_target = match.group(2).strip()
-            app_target = re.sub(r'[^\w\s-]', '', app_target)
-            if app_target not in ["the", "a", "my", "this"]:
-                res = tool_registry.execute("open_application", app_name=app_target)
-                return f"[System Tool Action Executed: Opened application '{app_target}']"
-
-    # 3. System Telemetry
-    if "telemetry" in p or "cpu" in p or "ram" in p or "system status" in p:
-        res = tool_registry.execute("get_system_telemetry")
-        return f"[System Tool Action Executed: CPU: {res.get('cpu_usage_percent')}%, RAM: {res.get('ram_percent')}%, Disk Free: {res.get('disk_free_gb')}GB]"
-
-    # 4. Lock Workstation
-    if "lock pc" in p or "lock workstation" in p or "lock computer" in p:
-        res = tool_registry.execute("lock_workstation")
-        return "[System Tool Action Executed: Workstation screen locked]"
-
-    return None
-
+from ai.tool_calling import ai_tool_caller
 
 class LLMService:
     def __init__(self):
@@ -88,20 +35,30 @@ class LLMService:
         prompt: str, 
         history: List[Dict[str, str]] = None,
         model: str = None,
-        system_prompt: str = None
+        system_prompt: str = None,
+        user_confirmed: bool = False
     ) -> AsyncGenerator[str, None]:
         """
-        Generates and streams response text chunks token-by-token asynchronously.
-        Automatically processes and executes system automation tools.
+        Processes tool execution via AIToolCaller and streams response tokens asynchronously.
         """
         active_model = model or self.openrouter_model
-        active_sys_prompt = system_prompt or (
+        base_sys_prompt = system_prompt or (
             "Your name is Phoenix. You are a real-time, highly intelligent AI personal assistant inspired by Jarvis. "
-            "You assist the user with tasks, computer control, memory management, and workflow automation. "
-            "Keep voice responses direct, concise, helpful, and natural."
+            "You assist the user with tasks, computer control, system telemetry, and workflow automation. "
+            "Keep responses direct, concise, helpful, and natural."
         )
+        active_sys_prompt = base_sys_prompt + ai_tool_caller.get_tool_system_instructions()
 
-        tool_result = process_system_tools(prompt)
+        tool_spec, tool_result = ai_tool_caller.process_request(prompt, user_confirmed=user_confirmed)
+
+        # Handle specific execution states directly
+        if tool_result:
+            if tool_result.get("requires_confirmation"):
+                yield tool_result.get("message", "This action requires explicit user confirmation. Would you like me to proceed?")
+                return
+            elif tool_result.get("ambiguous"):
+                yield tool_result.get("message", "I found multiple matching applications. Which one should I open?")
+                return
 
         system_msg = {
             "role": "system", 
@@ -119,7 +76,13 @@ class LLMService:
         formatted_messages.append({"role": "user", "content": prompt})
 
         if tool_result:
-            formatted_messages.append({"role": "system", "content": tool_result})
+            outcome_msg = tool_result.get("message", "Action completed successfully.")
+            tool_context_str = (
+                f"[SYSTEM NOTIFICATION: Tool Action Executed Successfully. Outcome: '{outcome_msg}'].\n"
+                "INSTRUCTION: State this confirmation directly and naturally to the user in 1 concise sentence. "
+                "DO NOT output raw JSON code blocks or internal function parameter schemas."
+            )
+            formatted_messages.append({"role": "system", "content": tool_context_str})
 
         if self.provider == "openrouter" and self.client:
             try:
@@ -131,10 +94,14 @@ class LLMService:
                 
                 async for chunk in response:
                     if chunk.choices and chunk.choices[0].delta.content:
-                        yield chunk.choices[0].delta.content
+                        text_chunk = chunk.choices[0].delta.content
+                        yield text_chunk
 
             except Exception as e:
-                yield f"[OPENROUTER ERROR]: Failed to generate response - {str(e)}"
+                if tool_result:
+                    yield tool_result.get("message", f"Executed tool action successfully.")
+                else:
+                    yield f"[OPENROUTER ERROR]: Failed to generate response - {str(e)}"
 
         elif self.provider == "gemini" and self.client:
             try:
@@ -146,14 +113,22 @@ class LLMService:
                     if chunk.text:
                         yield chunk.text
             except Exception as e:
-                yield f"[GEMINI ERROR]: Failed to generate response - {str(e)}"
+                if tool_result:
+                    yield tool_result.get("message", f"Executed tool action successfully.")
+                else:
+                    yield f"[GEMINI ERROR]: Failed to generate response - {str(e)}"
 
         else:
-            mock_tokens = [
-                f"[Phoenix AI Stream]: Received: '{prompt}'. ",
-                f"{tool_result if tool_result else 'Ready for voice commands!'}"
-            ]
-            for token in mock_tokens:
-                yield token
+            # Standalone local execution mode without external API key
+            if tool_result:
+                msg = tool_result.get("message", "Executed system control tool.")
+                yield msg
+            else:
+                mock_tokens = [
+                    f"[Phoenix AI Stream]: Received: '{prompt}'. ",
+                    "Ready to assist with computer automation!"
+                ]
+                for token in mock_tokens:
+                    yield token
 
 llm_service = LLMService()

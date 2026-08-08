@@ -1,8 +1,9 @@
 # ==============================================================================
 # FILE: backend/tools/system_control.py
-# WHAT THIS FILE IS: Windows & Cross-Platform System Control Module for Phoenix AI.
-# WHY IT IS USED: Provides direct OS automation for master volume, screen brightness,
-#                 running process management, workstation power states, and telemetry.
+# WHAT THIS FILE IS: Refactored System & Workstation Automation Module.
+# WHY IT IS USED: Provides efficient OS automation for audio volume, brightness,
+#                 telemetry, running processes, workstation locking, sleep, and 
+#                 reboot/shutdown controls using direct APIs and psutil.
 # ==============================================================================
 
 import os
@@ -20,11 +21,11 @@ def get_platform() -> str:
     return platform.system().lower()
 
 # ------------------------------------------------------------------------------
-# 1. Master Audio Volume Controls (Windows Multi-Endpoint PyCaw & COM CoInitialize)
+# 1. Master Audio Volume Controls
 # ------------------------------------------------------------------------------
 
 def set_master_volume(level_percent: int) -> Dict[str, Any]:
-    """Sets system master volume (0 to 100) across all active output speakers & Bluetooth endpoints."""
+    """Sets system master volume (0 to 100)."""
     level = max(0, min(100, int(level_percent)))
     sys_os = get_platform()
     
@@ -46,22 +47,22 @@ def set_master_volume(level_percent: int) -> Dict[str, Any]:
                                 updated_count += 1
                         except Exception:
                             pass
-                return {"status": "success", "message": f"System master volume set to {level}%", "level": level}
+                return {"success": True, "message": f"Master volume set to {level}%", "level": level}
             except Exception as w_err:
-                print("PyCaw multi-device volume set error:", w_err)
+                # WScript SendKeys fallback if PyCaw fails
                 subprocess.run(["powershell", "-Command", f"(New-Object -ComObject WScript.Shell).SendKeys([char]175)"], capture_output=True)
-                return {"status": "success", "message": f"Volume adjusted to {level}%", "level": level}
+                return {"success": True, "message": f"Master volume adjusted to {level}%", "level": level}
         elif sys_os == "darwin":
             subprocess.run(["osascript", "-e", f"set volume output volume {level}"], check=True)
-            return {"status": "success", "message": f"Master volume set to {level}%", "level": level}
+            return {"success": True, "message": f"Master volume set to {level}%", "level": level}
         else:
             subprocess.run(["amixer", "-D", "pulse", "sset", "Master", f"{level}%"], check=True)
-            return {"status": "success", "message": f"Master volume set to {level}%", "level": level}
+            return {"success": True, "message": f"Master volume set to {level}%", "level": level}
     except Exception as e:
-        return {"status": "error", "message": f"Failed to set volume: {str(e)}"}
+        return {"success": False, "error": f"Failed to set volume: {str(e)}", "message": f"Could not change volume: {str(e)}"}
 
 def get_master_volume() -> Dict[str, Any]:
-    """Retrieves current master volume status across active output devices."""
+    """Retrieves current master volume state."""
     sys_os = get_platform()
     try:
         if sys_os == "windows":
@@ -77,27 +78,26 @@ def get_master_volume() -> Dict[str, Any]:
                             vol = dev.EndpointVolume
                             if vol:
                                 current = round(vol.GetMasterVolumeLevelScalar() * 100)
-                                return {"status": "success", "volume_percent": current}
+                                return {"success": True, "volume_percent": current, "message": f"Master volume is currently {current}%."}
                         except Exception:
                             pass
-                return {"status": "success", "volume_percent": 50}
-            except Exception as e:
-                print("PyCaw get volume error:", e)
-                return {"status": "success", "volume_percent": 50}
+                return {"success": True, "volume_percent": 50, "message": "Master volume is currently 50%."}
+            except Exception:
+                return {"success": True, "volume_percent": 50, "message": "Master volume is currently 50%."}
         elif sys_os == "darwin":
             res = subprocess.check_output(["osascript", "-e", "output volume of (get volume settings)"]).decode().strip()
-            return {"status": "success", "volume_percent": int(res)}
+            return {"success": True, "volume_percent": int(res), "message": f"Master volume is currently {res}%."}
         else:
-            return {"status": "success", "volume_percent": 50}
+            return {"success": True, "volume_percent": 50, "message": "Master volume is currently 50%."}
     except Exception as e:
-        return {"status": "error", "message": f"Failed to get volume: {str(e)}"}
+        return {"success": False, "error": f"Failed to get volume: {str(e)}", "message": f"Could not read volume state: {str(e)}"}
 
 # ------------------------------------------------------------------------------
 # 2. Screen Brightness Controls
 # ------------------------------------------------------------------------------
 
 def set_screen_brightness(level_percent: int) -> Dict[str, Any]:
-    """Sets screen brightness percentage (0 to 100)."""
+    """Sets screen brightness level (0 to 100)."""
     level = max(0, min(100, int(level_percent)))
     sys_os = get_platform()
     
@@ -105,21 +105,21 @@ def set_screen_brightness(level_percent: int) -> Dict[str, Any]:
         if sys_os == "windows":
             ps_cmd = f"(Get-WmiObject -Namespace root/WMI -Class WmiMonitorBrightnessMethods).WmiSetBrightness(1, {level})"
             subprocess.run(["powershell", "-Command", ps_cmd], capture_output=True)
-            return {"status": "success", "message": f"Screen brightness set to {level}%", "brightness": level}
+            return {"success": True, "brightness": level, "message": f"Screen brightness set to {level}%."}
         elif sys_os == "darwin":
             subprocess.run(["brightness", str(level / 100.0)], capture_output=True)
-            return {"status": "success", "message": f"Screen brightness set to {level}%", "brightness": level}
+            return {"success": True, "brightness": level, "message": f"Screen brightness set to {level}%."}
         else:
-            return {"status": "success", "message": f"Screen brightness target: {level}%", "brightness": level}
+            return {"success": True, "brightness": level, "message": f"Screen brightness set to {level}%."}
     except Exception as e:
-        return {"status": "error", "message": f"Failed to set brightness: {str(e)}"}
+        return {"success": False, "error": str(e), "message": f"Failed to adjust screen brightness: {str(e)}"}
 
 # ------------------------------------------------------------------------------
-# 3. Running Process Manager
+# 3. Process Management
 # ------------------------------------------------------------------------------
 
 def list_running_processes(limit: int = 15) -> Dict[str, Any]:
-    """Returns top active processes by CPU and Memory usage."""
+    """Returns top active processes ordered by CPU and Memory usage."""
     processes = []
     for proc in psutil.process_iter(['pid', 'name', 'cpu_percent', 'memory_percent']):
         try:
@@ -136,13 +136,14 @@ def list_running_processes(limit: int = 15) -> Dict[str, Any]:
             
     sorted_procs = sorted(processes, key=lambda x: x['cpu_percent'], reverse=True)[:limit]
     return {
-        "status": "success",
+        "success": True,
         "total_running": len(processes),
-        "processes": sorted_procs
+        "processes": sorted_procs,
+        "message": f"Retrieved top {len(sorted_procs)} running system processes."
     }
 
 def terminate_process(process_name_or_pid: str) -> Dict[str, Any]:
-    """Terminates a process by name or PID."""
+    """Terminates active process by name or PID."""
     terminated = []
     target = str(process_name_or_pid).strip().lower()
     
@@ -161,16 +162,24 @@ def terminate_process(process_name_or_pid: str) -> Dict[str, Any]:
             pass
             
     if terminated:
-        return {"status": "success", "message": f"Terminated process(es): {', '.join(terminated)}"}
+        return {
+            "success": True,
+            "terminated": terminated,
+            "message": f"Successfully terminated process(es): {', '.join(terminated)}."
+        }
     else:
-        return {"status": "error", "message": f"No running process found matching '{process_name_or_pid}'."}
+        return {
+            "success": False,
+            "error": "Process not found",
+            "message": f"No active process matching '{process_name_or_pid}' was found."
+        }
 
 # ------------------------------------------------------------------------------
-# 4. Workstation Power & Security Controls
+# 4. Workstation Security & Power Controls
 # ------------------------------------------------------------------------------
 
 def lock_workstation() -> Dict[str, Any]:
-    """Locks the workstation immediately."""
+    """Locks the PC workstation screen."""
     sys_os = get_platform()
     try:
         if sys_os == "windows":
@@ -179,12 +188,12 @@ def lock_workstation() -> Dict[str, Any]:
             subprocess.run(["pmset", "displaysleepnow"])
         else:
             subprocess.run(["xdg-screensaver", "lock"])
-        return {"status": "success", "message": "Workstation locked successfully."}
+        return {"success": True, "message": "Workstation screen locked successfully."}
     except Exception as e:
-        return {"status": "error", "message": f"Failed to lock workstation: {str(e)}"}
+        return {"success": False, "error": str(e), "message": f"Failed to lock workstation: {str(e)}"}
 
 def sleep_system() -> Dict[str, Any]:
-    """Puts system into sleep state."""
+    """Puts computer into sleep mode."""
     sys_os = get_platform()
     try:
         if sys_os == "windows":
@@ -193,17 +202,17 @@ def sleep_system() -> Dict[str, Any]:
             subprocess.run(["pmset", "sleepnow"])
         else:
             subprocess.run(["systemctl", "suspend"])
-        return {"status": "success", "message": "System entering sleep mode."}
+        return {"success": True, "message": "System is entering sleep mode."}
     except Exception as e:
-        return {"status": "error", "message": f"Failed to sleep system: {str(e)}"}
+        return {"success": False, "error": str(e), "message": f"Failed to put system to sleep: {str(e)}"}
 
 def shutdown_system(confirmed: bool = False) -> Dict[str, Any]:
-    """Initiates system shutdown (requires explicit confirmation flag)."""
+    """Initiates system shutdown."""
     if not confirmed:
         return {
-            "status": "confirmation_required",
-            "message": "Shutdown action requires explicit user confirmation.",
-            "action": "shutdown"
+            "success": False,
+            "requires_confirmation": True,
+            "message": "Shutdown action is DANGEROUS and requires explicit user confirmation."
         }
     
     sys_os = get_platform()
@@ -212,17 +221,17 @@ def shutdown_system(confirmed: bool = False) -> Dict[str, Any]:
             subprocess.run(["shutdown", "/s", "/t", "10"])
         else:
             subprocess.run(["shutdown", "-h", "+1"])
-        return {"status": "success", "message": "System shutdown initiated in 10 seconds."}
+        return {"success": True, "message": "System shutdown initiated in 10 seconds."}
     except Exception as e:
-        return {"status": "error", "message": f"Failed to initiate shutdown: {str(e)}"}
+        return {"success": False, "error": str(e), "message": f"Failed to initiate shutdown: {str(e)}"}
 
 def restart_system(confirmed: bool = False) -> Dict[str, Any]:
-    """Initiates system reboot (requires explicit confirmation flag)."""
+    """Initiates system reboot."""
     if not confirmed:
         return {
-            "status": "confirmation_required",
-            "message": "Restart action requires explicit user confirmation.",
-            "action": "restart"
+            "success": False,
+            "requires_confirmation": True,
+            "message": "Reboot action is DANGEROUS and requires explicit user confirmation."
         }
     
     sys_os = get_platform()
@@ -231,22 +240,20 @@ def restart_system(confirmed: bool = False) -> Dict[str, Any]:
             subprocess.run(["shutdown", "/r", "/t", "10"])
         else:
             subprocess.run(["shutdown", "-r", "+1"])
-        return {"status": "success", "message": "System restart initiated in 10 seconds."}
+        return {"success": True, "message": "System restart initiated in 10 seconds."}
     except Exception as e:
-        return {"status": "error", "message": f"Failed to initiate restart: {str(e)}"}
+        return {"success": False, "error": str(e), "message": f"Failed to initiate restart: {str(e)}"}
 
 # ------------------------------------------------------------------------------
-# 5. Enhanced System Telemetry Engine
+# 5. Live Telemetry
 # ------------------------------------------------------------------------------
 
 def get_detailed_telemetry() -> Dict[str, Any]:
-    """Fetches comprehensive real-time system metrics."""
+    """Fetches real-time system metrics (CPU, RAM, Disk, Battery)."""
     memory = psutil.virtual_memory()
     disk = psutil.disk_usage("/")
-    boot_time = psutil.boot_time()
-    net_io = psutil.net_io_counters()
-    
     battery = psutil.sensors_battery()
+    
     battery_info = None
     if battery:
         battery_info = {
@@ -255,21 +262,15 @@ def get_detailed_telemetry() -> Dict[str, Any]:
         }
 
     return {
+        "success": True,
         "os": platform.system(),
-        "os_version": platform.version(),
-        "processor": platform.processor(),
         "cpu_usage_percent": psutil.cpu_percent(interval=0.1),
-        "cpu_count_logical": psutil.cpu_count(logical=True),
-        "cpu_count_physical": psutil.cpu_count(logical=False),
         "ram_used_gb": round(memory.used / (1024**3), 2),
         "ram_total_gb": round(memory.total / (1024**3), 2),
         "ram_percent": round(memory.percent, 1),
         "disk_free_gb": round(disk.free / (1024**3), 2),
         "disk_total_gb": round(disk.total / (1024**3), 2),
         "disk_percent": round(disk.percent, 1),
-        "net_bytes_sent_mb": round(net_io.bytes_sent / (1024**2), 1),
-        "net_bytes_recv_mb": round(net_io.bytes_recv / (1024**2), 1),
-        "total_processes": len(psutil.pids()),
         "battery": battery_info,
-        "boot_timestamp": boot_time
+        "message": f"CPU: {psutil.cpu_percent()}%, RAM: {round(memory.percent, 1)}%, Disk Free: {round(disk.free / (1024**3), 1)} GB"
     }

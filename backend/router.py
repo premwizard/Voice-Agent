@@ -1,9 +1,8 @@
 # ==============================================================================
 # FILE: router.py
 # WHAT THIS FILE IS: API Router Module for HTTP Endpoints and WebSockets.
-# WHY IT IS USED: Contains all endpoint definitions (health check, config, 
-#                 REST AI chat, system control, telemetry, and WebSocket streaming) 
-#                 grouped cleanly under an APIRouter.
+# WHY IT IS USED: Exposes system endpoints, telemetry metrics, system tool execution,
+#                 and real-time WebSocket streaming with tool calling support.
 # ==============================================================================
 
 import json
@@ -16,18 +15,20 @@ from llm_service import llm_service
 from tools.tool_registry import tool_registry
 from tools.system_control import get_detailed_telemetry
 
-# Create an APIRouter instance with a prefix '/api/v1' for API routes
+# Create APIRouter instance with prefix '/api/v1'
 router = APIRouter(prefix="/api/v1", tags=["system"])
 
 # Define Pydantic models for API request bodies
 class ChatRequest(BaseModel):
     prompt: str
+    user_confirmed: Optional[bool] = False
 
 class SystemActionRequest(BaseModel):
     action: str
     args: Optional[Dict[str, Any]] = None
+    user_confirmed: Optional[bool] = False
 
-# Define a GET route for checking server health status
+# GET route for health check
 @router.get("/health")
 def get_health():
     return {
@@ -36,7 +37,7 @@ def get_health():
         "ai_provider": settings.AI_PROVIDER
     }
 
-# Define a GET route for exposing public system configurations
+# GET route for public config
 @router.get("/config/public")
 def get_public_config():
     return {
@@ -44,28 +45,28 @@ def get_public_config():
         "environment": settings.ENVIRONMENT
     }
 
-# GET endpoint to fetch live system telemetry metrics
+# GET endpoint for real-time telemetry
 @router.get("/system/telemetry")
 def get_telemetry_endpoint():
-    """Returns detailed real-time system metrics (CPU, RAM, Disk, Battery, Network)."""
+    """Returns real-time system metrics (CPU, RAM, Disk, Battery)."""
     return get_detailed_telemetry()
 
-# POST endpoint to execute direct system control actions from dashboard
+# POST endpoint to execute direct system control actions
 @router.post("/system/action")
 def execute_system_action(request: SystemActionRequest):
-    """Executes a system control tool by action name."""
+    """Executes a system control tool by action name with permission checks."""
     action_args = request.args or {}
-    result = tool_registry.execute(request.action, **action_args)
+    result = tool_registry.execute(request.action, user_confirmed=request.user_confirmed or False, **action_args)
     return {"action": request.action, "result": result}
 
-# Define a POST REST endpoint for testing AI response via standard HTTP curl
+# POST REST endpoint for testing AI response
 @router.post("/chat")
 async def rest_chat(request: ChatRequest):
     """
-    HTTP POST REST endpoint to test AI response directly using standard curl requests.
+    HTTP POST REST endpoint to test AI response directly.
     """
     response_tokens = []
-    async for token_chunk in llm_service.stream_response(request.prompt):
+    async for token_chunk in llm_service.stream_response(request.prompt, user_confirmed=request.user_confirmed or False):
         response_tokens.append(token_chunk)
     
     full_response = "".join(response_tokens)
@@ -76,12 +77,11 @@ async def rest_chat(request: ChatRequest):
         "response": full_response
     }
 
-# Define a WebSocket endpoint for real-time bi-directional streaming communication with AI
+# WebSocket endpoint for real-time bi-directional streaming
 @router.websocket("/ws/stream")
 async def websocket_chat_endpoint(websocket: WebSocket):
     """
-    Real-time WebSocket endpoint that accepts client connections, listens for 
-    incoming text prompts or JSON payloads, and streams AI generated text tokens back in real time.
+    Real-time WebSocket endpoint that accepts client connections and streams AI text tokens.
     """
     await manager.connect(websocket)
     
@@ -92,9 +92,10 @@ async def websocket_chat_endpoint(websocket: WebSocket):
             raw_data = await websocket.receive_text()
             prompt = raw_data
             history = None
-
             model = None
             system_prompt = None
+            user_confirmed = False
+
             try:
                 data = json.loads(raw_data)
                 if isinstance(data, dict):
@@ -102,10 +103,13 @@ async def websocket_chat_endpoint(websocket: WebSocket):
                     history = data.get("history", None)
                     model = data.get("model", None)
                     system_prompt = data.get("system_prompt", None)
+                    user_confirmed = data.get("user_confirmed", False)
             except Exception:
                 pass
             
-            async for token_chunk in llm_service.stream_response(prompt, history, model, system_prompt):
+            async for token_chunk in llm_service.stream_response(
+                prompt, history=history, model=model, system_prompt=system_prompt, user_confirmed=user_confirmed
+            ):
                 await manager.send_personal_message(token_chunk, websocket)
             
             await manager.send_personal_message("[END_OF_STREAM]", websocket)
