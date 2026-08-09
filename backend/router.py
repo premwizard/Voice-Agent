@@ -9,9 +9,8 @@
 
 import io
 import json
-import asyncio
 from typing import Dict, Any, Optional, List
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Request
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from config import settings

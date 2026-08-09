@@ -10,8 +10,6 @@
 from fastapi import FastAPI
 # Import CORS Middleware to allow web browsers (Next.js frontend) to connect safely
 from fastapi.middleware.cors import CORSMiddleware
-# Import settings object containing loaded configuration variables
-from config import settings
 # Import api_router containing all REST endpoints and WebSocket endpoints
 from router import router as api_router
 

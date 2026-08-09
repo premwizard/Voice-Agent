@@ -5,7 +5,6 @@
 # ==============================================================================
 
 import unittest
-from tools.browser_automation import browser_engine
 
 class TestBrowserAutomation(unittest.TestCase):
     def test_open_website_url_formatting(self):

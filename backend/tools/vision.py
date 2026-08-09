@@ -8,10 +8,8 @@
 
 import os
 import sys
-import time
-import base64
 import ctypes
-from typing import Dict, Any, Optional, Tuple
+from typing import Dict, Any, Tuple
 from config import settings
 
 class ScreenVisionEngine:
@@ -113,7 +111,7 @@ class ScreenVisionEngine:
                     "analysis": response.text,
                     "message": f"Screen Analysis: {response.text}"
                 }
-        except Exception as e:
+        except Exception:
             pass
 
         return {

@@ -5,9 +5,7 @@
 #                 to execute tools dynamically, formats context, and streams text responses.
 # ==============================================================================
 
-import json
-import re
-from typing import AsyncGenerator, List, Dict, Union, Optional
+from typing import AsyncGenerator, List, Dict
 from openai import AsyncOpenAI
 from google import genai
 from config import settings
@@ -101,7 +99,7 @@ class LLMService:
 
             except Exception as e:
                 if tool_result:
-                    yield tool_result.get("message", f"Executed tool action successfully.")
+                    yield tool_result.get("message", "Executed tool action successfully.")
                 else:
                     yield f"[OPENROUTER ERROR]: Failed to generate response - {str(e)}"
 
@@ -116,7 +114,7 @@ class LLMService:
                         yield chunk.text
             except Exception as e:
                 if tool_result:
-                    yield tool_result.get("message", f"Executed tool action successfully.")
+                    yield tool_result.get("message", "Executed tool action successfully.")
                 else:
                     yield f"[GEMINI ERROR]: Failed to generate response - {str(e)}"
 

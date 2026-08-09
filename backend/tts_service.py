@@ -5,9 +5,7 @@
 #                 using Microsoft Neural Voices (en-US-ChristopherNeural).
 # ==============================================================================
 
-import os
 import io
-import asyncio
 from typing import Optional
 
 class TTSService:

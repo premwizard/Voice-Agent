@@ -8,10 +8,9 @@
 
 import os
 import sys
-import glob
 import time
 import winreg
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List
 
 class ApplicationDiscoveryService:
     def __init__(self):

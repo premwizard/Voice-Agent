@@ -8,7 +8,7 @@
 
 import re
 import difflib
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Dict, Any, List, Tuple
 from tools.applications.discovery import app_discovery_service
 
 # Category mappings for natural language generic terms to software keywords

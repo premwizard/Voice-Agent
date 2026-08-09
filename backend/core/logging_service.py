@@ -5,7 +5,6 @@
 #                 permission levels, execution times (ms), and success/failure results.
 # ==============================================================================
 
-import time
 import logging
 from datetime import datetime, timezone
 from typing import Dict, Any

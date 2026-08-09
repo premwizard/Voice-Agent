@@ -8,7 +8,7 @@
 import os
 import sqlite3
 from datetime import datetime, timezone
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, Optional
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "phoenix_memory.db")
 

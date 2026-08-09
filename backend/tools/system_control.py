@@ -6,13 +6,11 @@
 #                 reboot/shutdown controls using direct APIs and psutil.
 # ==============================================================================
 
-import os
-import sys
 import subprocess
 import platform
 import psutil
 import warnings
-from typing import Dict, Any, List
+from typing import Dict, Any
 
 warnings.filterwarnings("ignore")
 
@@ -45,9 +43,9 @@ def set_master_volume(level_percent: int) -> Dict[str, Any]:
                 # Query actual synced hardware scalar back from OS
                 actual = round(volume.GetMasterVolumeLevelScalar() * 100)
                 return {"success": True, "message": f"Master volume set to {actual}%", "level": actual, "volume_percent": actual}
-            except Exception as w_err:
+            except Exception:
                 # WScript SendKeys fallback if PyCaw fails
-                subprocess.run(["powershell", "-Command", f"(New-Object -ComObject WScript.Shell).SendKeys([char]175)"], capture_output=True)
+                subprocess.run(["powershell", "-Command", "(New-Object -ComObject WScript.Shell).SendKeys([char]175)"], capture_output=True)
                 return {"success": True, "message": f"Master volume adjusted to {level}%", "level": level, "volume_percent": level}
         elif sys_os == "darwin":
             subprocess.run(["osascript", "-e", f"set volume output volume {level}"], check=True)

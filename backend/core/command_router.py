@@ -6,9 +6,8 @@
 #                 bypass LLM reasoning to execute in under 50ms.
 # ==============================================================================
 
-import time
 from enum import Enum
-from typing import Dict, Any, Tuple, Optional
+from typing import Dict, Any
 from core.latency import LatencyTracker
 from ai.tool_calling import ai_tool_caller
 
@@ -36,7 +35,6 @@ class CommandRouter:
           }
         """
         tracker = LatencyTracker()
-        p = user_prompt.lower().strip()
 
         # Fast Intent Routing Check
         tool_spec, tool_result = ai_tool_caller.process_request(user_prompt, user_confirmed=user_confirmed)

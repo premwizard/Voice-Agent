@@ -8,7 +8,7 @@
 
 import time
 from typing import Dict, Any, Callable, List, Optional
-from core.permissions import evaluate_permission, get_tool_permission_level, PermissionLevel
+from core.permissions import evaluate_permission, get_tool_permission_level
 from core.logging_service import tool_logger
 from core.context import system_context
 from tools.applications.resolver import app_resolver
