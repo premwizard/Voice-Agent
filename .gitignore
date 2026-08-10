@@ -1,8 +1,22 @@
-backend/venv/
+# Environment & Secret Files (DO NOT COMMIT)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.*
+*.env
 backend/.env
 frontend/.env.local
+!*.env.example
+
+# Virtual Environments & Dependencies
+backend/venv/
 frontend/node_modules/
 frontend/.next/
+frontend/out/
+frontend/build/
 *.log
 __pycache__/
 .DS_Store
+*.db
