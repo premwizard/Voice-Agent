@@ -145,20 +145,33 @@ tool_registry = ToolRegistry()
 
 @tool_registry.register(
     "open_application",
-    "Launches a Windows desktop application by natural language name or description (e.g. 'chrome', 'browser', 'code editor', 'notepad', 'vscode').",
+    "Launches a Windows desktop application by natural language name or description (e.g. 'chrome', 'browser', 'code editor', 'notepad', 'vscode', 'antigravity').",
     parameters={
         "type": "object",
         "properties": {
             "application": {
                 "type": "string",
                 "description": "Name, description, or alias of the application to launch."
+            },
+            "app_name": {
+                "type": "string",
+                "description": "Name or alias of the application to launch."
             }
         },
-        "required": ["application"]
+        "required": []
     }
 )
-def tool_open_application(application: str) -> Dict[str, Any]:
-    resolved = app_resolver.resolve(application)
+def tool_open_application(
+    application: str = "",
+    app_name: str = "",
+    name: str = "",
+    app: str = ""
+) -> Dict[str, Any]:
+    target = application or app_name or name or app
+    if not target:
+        return {"success": False, "message": "Please specify an application name to launch."}
+
+    resolved = app_resolver.resolve(target)
     if not resolved["success"]:
         return resolved
     
@@ -167,6 +180,7 @@ def tool_open_application(application: str) -> Dict[str, Any]:
     if launch_res["success"]:
         system_context.update_app_context(best_match["display_name"], best_match["path"])
     return launch_res
+
 
 @tool_registry.register(
     "list_applications",

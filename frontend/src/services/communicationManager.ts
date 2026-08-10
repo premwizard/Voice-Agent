@@ -14,12 +14,13 @@ export interface CommandResult {
   route: "FAST_PATH" | "CHAT" | "COMPLEX_TASK";
   confidence: "HIGH" | "MEDIUM" | "LOW";
   executed: boolean;
+  action?: string;
   tool?: string;
   arguments?: Record<string, any>;
   result?: any;
   latency_metrics?: {
     total_latency_ms: number;
-    stages: Record<string, float>;
+    stages: Record<string, number>;
   };
   message: string;
 }

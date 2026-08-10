@@ -32,5 +32,12 @@ class TestApplicationResolver(unittest.TestCase):
         self.assertEqual(res["status"], "not_found")
         self.assertIsNone(res["best_match"])
 
+    def test_resolve_antigravity(self):
+        res = app_resolver.resolve("antigravity")
+        self.assertTrue(res["success"])
+        self.assertIsNotNone(res["best_match"])
+        self.assertIn("antigravity", res["best_match"]["display_name"].lower())
+
+
 if __name__ == "__main__":
     unittest.main()

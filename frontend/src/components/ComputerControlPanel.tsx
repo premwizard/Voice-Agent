@@ -8,7 +8,28 @@
 // ==============================================================================
 
 import React, { useState, useEffect, useRef } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { executeSystemAction, ProcessItem } from "../services/apiService";
+import {
+  Volume2,
+  Sun,
+  Laptop,
+  RotateCw,
+  Lock,
+  Moon,
+  Power,
+  RefreshCcw,
+  Activity,
+  Terminal,
+  Calculator,
+  FileText,
+  Globe,
+  Code,
+  Rocket,
+  XCircle,
+  AlertTriangle,
+  Sliders,
+} from "lucide-react";
 
 export const ComputerControlPanel: React.FC = () => {
   const [volume, setVolume] = useState<number>(50);
@@ -24,10 +45,22 @@ export const ComputerControlPanel: React.FC = () => {
   const [loadingProcs, setLoadingProcs] = useState<boolean>(false);
 
   const isUserDraggingRef = useRef<boolean>(false);
+  const dragTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const volDebounceRef = useRef<NodeJS.Timeout | null>(null);
+  const brightDebounceRef = useRef<NodeJS.Timeout | null>(null);
 
   const showFeedback = (msg: string) => {
     setStatusMessage(msg);
     setTimeout(() => setStatusMessage(null), 3500);
+  };
+
+  // Lock polling while user is actively sliding or recently slid
+  const markUserActive = () => {
+    isUserDraggingRef.current = true;
+    if (dragTimeoutRef.current) clearTimeout(dragTimeoutRef.current);
+    dragTimeoutRef.current = setTimeout(() => {
+      isUserDraggingRef.current = false;
+    }, 4000);
   };
 
   // Sync volume and brightness from OS hardware
@@ -36,31 +69,40 @@ export const ComputerControlPanel: React.FC = () => {
 
     try {
       const volRes = await executeSystemAction("get_master_volume");
-      if (volRes.result?.data?.volume_percent !== undefined) {
-        setVolume(volRes.result.data.volume_percent);
-      } else if (volRes.result?.data?.level !== undefined) {
-        setVolume(volRes.result.data.level);
+      if (!isUserDraggingRef.current) {
+        if (volRes.result?.data?.volume_percent !== undefined) {
+          setVolume(volRes.result.data.volume_percent);
+        } else if (volRes.result?.data?.level !== undefined) {
+          setVolume(volRes.result.data.level);
+        }
       }
 
       const brightRes = await executeSystemAction("get_screen_brightness");
-      if (brightRes.result?.data?.brightness_percent !== undefined) {
-        setBrightness(brightRes.result.data.brightness_percent);
-      } else if (brightRes.result?.data?.brightness !== undefined) {
-        setBrightness(brightRes.result.data.brightness);
+      if (!isUserDraggingRef.current) {
+        if (brightRes.result?.data?.brightness_percent !== undefined) {
+          setBrightness(brightRes.result.data.brightness_percent);
+        } else if (brightRes.result?.data?.brightness !== undefined) {
+          setBrightness(brightRes.result.data.brightness);
+        }
       }
     } catch (e) {
       console.warn("Hardware level sync failed:", e);
     }
   };
 
-  // Initial fetch and 2-second polling loop for real-time hardware sync
+  // Initial fetch and 3-second polling loop for real-time hardware sync
   useEffect(() => {
     syncHardwareLevels();
     const timer = setInterval(() => {
       syncHardwareLevels();
-    }, 2000);
+    }, 3000);
 
-    return () => clearInterval(timer);
+    return () => {
+      clearInterval(timer);
+      if (dragTimeoutRef.current) clearTimeout(dragTimeoutRef.current);
+      if (volDebounceRef.current) clearTimeout(volDebounceRef.current);
+      if (brightDebounceRef.current) clearTimeout(brightDebounceRef.current);
+    };
   }, []);
 
   const handleAppLaunch = async (appName: string) => {
@@ -71,32 +113,26 @@ export const ComputerControlPanel: React.FC = () => {
     }
   };
 
-  const handleVolumeChange = async (newVol: number) => {
+  const handleVolumeChange = (newVol: number) => {
     setVolume(newVol);
-    isUserDraggingRef.current = true;
-    const res = await executeSystemAction("set_master_volume", { level_percent: newVol });
-    
-    // Sync to exact read-back value from Windows driver
-    if (res.result?.data?.volume_percent !== undefined) {
-      setVolume(res.result.data.volume_percent);
-    } else if (res.result?.data?.level !== undefined) {
-      setVolume(res.result.data.level);
-    }
-    setTimeout(() => { isUserDraggingRef.current = false; }, 1000);
+    markUserActive();
+
+    if (volDebounceRef.current) clearTimeout(volDebounceRef.current);
+    volDebounceRef.current = setTimeout(async () => {
+      await executeSystemAction("set_master_volume", { level_percent: newVol });
+    }, 180);
   };
 
-  const handleBrightnessChange = async (newBright: number) => {
+  const handleBrightnessChange = (newBright: number) => {
     setBrightness(newBright);
-    isUserDraggingRef.current = true;
-    const res = await executeSystemAction("set_screen_brightness", { level_percent: newBright });
-    
-    if (res.result?.data?.brightness_percent !== undefined) {
-      setBrightness(res.result.data.brightness_percent);
-    } else if (res.result?.data?.brightness !== undefined) {
-      setBrightness(res.result.data.brightness);
-    }
-    setTimeout(() => { isUserDraggingRef.current = false; }, 1000);
+    markUserActive();
+
+    if (brightDebounceRef.current) clearTimeout(brightDebounceRef.current);
+    brightDebounceRef.current = setTimeout(async () => {
+      await executeSystemAction("set_screen_brightness", { level_percent: newBright });
+    }, 180);
   };
+
 
   const handleLockPC = async () => {
     showFeedback("Locking workstation...");
@@ -142,38 +178,52 @@ export const ComputerControlPanel: React.FC = () => {
   };
 
   return (
-    <div className="w-full bg-slate-900/60 backdrop-blur-xl border border-slate-800/80 rounded-2xl p-5 shadow-2xl space-y-5">
+    <div className="w-full glass-panel border border-[#D9CFC7] rounded-2xl p-5 shadow-xl space-y-5">
       {/* Panel Header */}
-      <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
-        <h2 className="text-base font-semibold text-slate-100 flex items-center gap-2">
-          <span>💻 Computer Control & App Launcher</span>
+      <div className="flex items-center justify-between border-b border-[#D9CFC7] pb-3">
+        <h2 className="text-base font-bold text-[#2D2825] flex items-center gap-2">
+          <Laptop className="w-4 h-4 text-[#4A3E35]" />
+          <span>Computer Control & Application Automation</span>
         </h2>
         {statusMessage && (
-          <span className="text-xs font-medium px-2.5 py-1 rounded-md bg-cyan-950/90 text-cyan-300 border border-cyan-800/60 animate-fade-in">
+          <motion.span
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0 }}
+            className="text-xs font-bold px-2.5 py-1 rounded-md bg-[#C9B59C]/20 text-[#4A3E35] border border-[#C9B59C]/40 font-mono"
+          >
             {statusMessage}
-          </span>
+          </motion.span>
         )}
       </div>
 
       {/* Main Control Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Sliders Box */}
-        <div className="md:col-span-2 bg-slate-950/40 border border-slate-800/60 rounded-xl p-4 space-y-4">
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="md:col-span-2 bg-[#F9F8F6]/80 border border-[#D9CFC7] rounded-xl p-4 space-y-4 glass-panel-hover"
+        >
           <div className="flex items-center justify-between">
-            <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Audio & Display Controls</h3>
+            <h3 className="text-xs font-bold text-[#2D2825] uppercase tracking-wider flex items-center gap-1.5">
+              <Sliders className="w-3.5 h-3.5 text-[#4A3E35]" /> Audio & Display Controls
+            </h3>
             <button
               onClick={syncHardwareLevels}
-              className="text-[11px] text-cyan-400 hover:underline font-mono"
+              className="text-[11px] text-[#4A3E35] hover:underline transition flex items-center gap-1 font-mono font-bold"
             >
-              ↻ Sync Laptop
+              <RotateCw className="w-3 h-3" /> Sync OS Driver
             </button>
           </div>
           
           {/* Master Volume */}
           <div className="space-y-1.5">
-            <div className="flex justify-between text-xs text-slate-300">
-              <span className="flex items-center gap-1.5">🔊 Master Volume</span>
-              <span className="font-mono text-cyan-400 font-bold">{volume}%</span>
+            <div className="flex justify-between text-xs text-[#2D2825]">
+              <span className="flex items-center gap-1.5 font-bold">
+                <Volume2 className="w-4 h-4 text-[#4A3E35]" /> Master Volume
+              </span>
+              <span className="font-mono text-[#4A3E35] font-bold">{volume}%</span>
             </div>
             <input
               type="range"
@@ -181,15 +231,17 @@ export const ComputerControlPanel: React.FC = () => {
               max="100"
               value={volume}
               onChange={(e) => handleVolumeChange(Number(e.target.value))}
-              className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-cyan-400"
+              className="w-full h-2 bg-[#D9CFC7]/50 rounded-lg appearance-none cursor-pointer accent-[#C9B59C] transition"
             />
           </div>
 
           {/* Screen Brightness */}
           <div className="space-y-1.5">
-            <div className="flex justify-between text-xs text-slate-300">
-              <span className="flex items-center gap-1.5">☀️ Screen Brightness</span>
-              <span className="font-mono text-amber-400 font-bold">{brightness}%</span>
+            <div className="flex justify-between text-xs text-[#2D2825]">
+              <span className="flex items-center gap-1.5 font-bold">
+                <Sun className="w-4 h-4 text-[#4A3E35]" /> Screen Brightness
+              </span>
+              <span className="font-mono text-[#4A3E35] font-bold">{brightness}%</span>
             </div>
             <input
               type="range"
@@ -197,43 +249,57 @@ export const ComputerControlPanel: React.FC = () => {
               max="100"
               value={brightness}
               onChange={(e) => handleBrightnessChange(Number(e.target.value))}
-              className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-amber-400"
+              className="w-full h-2 bg-[#D9CFC7]/50 rounded-lg appearance-none cursor-pointer accent-[#C9B59C] transition"
             />
           </div>
-        </div>
+        </motion.div>
 
         {/* Quick App Launcher */}
-        <div className="md:col-span-2 bg-slate-950/40 border border-slate-800/60 rounded-xl p-4 space-y-3">
-          <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Quick Application Launcher</h3>
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="md:col-span-2 bg-[#F9F8F6]/80 border border-[#D9CFC7] rounded-xl p-4 space-y-3 glass-panel-hover"
+        >
+          <h3 className="text-xs font-bold text-[#2D2825] uppercase tracking-wider flex items-center gap-1.5">
+            <Rocket className="w-3.5 h-3.5 text-[#4A3E35]" /> Quick App Launcher
+          </h3>
           <div className="grid grid-cols-3 gap-2">
             {[
-              { label: "Antigravity", app: "antigravity", icon: "🚀" },
-              { label: "VS Code", app: "vscode", icon: "💙" },
-              { label: "Chrome", app: "chrome", icon: "🌐" },
-              { label: "Terminal", app: "cmd", icon: "⚙️" },
-              { label: "Calculator", app: "calc", icon: "🧮" },
-              { label: "Notepad", app: "notepad", icon: "📝" },
+              { label: "Antigravity", app: "antigravity", icon: <Rocket className="w-3.5 h-3.5 text-[#4A3E35]" /> },
+              { label: "VS Code", app: "vscode", icon: <Code className="w-3.5 h-3.5 text-[#4A3E35]" /> },
+              { label: "Chrome", app: "chrome", icon: <Globe className="w-3.5 h-3.5 text-[#4A3E35]" /> },
+              { label: "Terminal", app: "cmd", icon: <Terminal className="w-3.5 h-3.5 text-[#4A3E35]" /> },
+              { label: "Calculator", app: "calc", icon: <Calculator className="w-3.5 h-3.5 text-[#4A3E35]" /> },
+              { label: "Notepad", app: "notepad", icon: <FileText className="w-3.5 h-3.5 text-[#4A3E35]" /> },
             ].map((item) => (
-              <button
+              <motion.button
+                whileHover={{ scale: 1.04 }}
+                whileTap={{ scale: 0.96 }}
                 key={item.app}
                 onClick={() => handleAppLaunch(item.app)}
-                className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg bg-slate-800/60 hover:bg-slate-700/80 border border-slate-700/50 text-slate-200 text-xs font-medium transition-all hover:scale-105"
+                className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg bg-[#EFE9E3] hover:bg-[#F9F8F6] border border-[#D9CFC7] text-[#2D2825] text-xs font-bold transition-all shadow-sm"
               >
-                <span>{item.icon}</span>
+                {item.icon}
                 <span>{item.label}</span>
-              </button>
+              </motion.button>
             ))}
           </div>
-        </div>
+        </motion.div>
 
         {/* Workstation Power & Security Toolbar */}
-        <div className="md:col-span-4 bg-slate-950/40 border border-slate-800/60 rounded-xl p-4 flex flex-wrap items-center justify-between gap-3">
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className="md:col-span-4 bg-[#F9F8F6]/80 border border-[#D9CFC7] rounded-xl p-4 flex flex-wrap items-center justify-between gap-3"
+        >
           <div className="flex items-center space-x-2">
             <button
               onClick={toggleProcessList}
-              className="px-3.5 py-2 rounded-lg bg-indigo-900/40 hover:bg-indigo-800/60 border border-indigo-700/50 text-indigo-200 text-xs font-medium transition-colors flex items-center gap-1.5"
+              className="px-3.5 py-2 rounded-lg bg-[#EFE9E3] hover:bg-[#F9F8F6] border border-[#D9CFC7] text-[#2D2825] text-xs font-bold transition-all flex items-center gap-1.5 active:scale-95 shadow-sm"
             >
-              <span>📊</span>
+              <Activity className="w-4 h-4 text-[#4A3E35]" />
               <span>{showProcesses ? "Hide Process Manager" : "Open Process Manager"}</span>
             </button>
           </div>
@@ -241,101 +307,117 @@ export const ComputerControlPanel: React.FC = () => {
           <div className="flex items-center space-x-2">
             <button
               onClick={handleLockPC}
-              className="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium transition-colors border border-slate-700 flex items-center gap-1"
+              className="px-3 py-2 rounded-lg bg-[#EFE9E3] hover:bg-[#F9F8F6] text-[#2D2825] text-xs font-bold transition-colors border border-[#D9CFC7] flex items-center gap-1.5 shadow-sm"
             >
-              🔒 Lock PC
+              <Lock className="w-3.5 h-3.5 text-[#4A3E35]" /> Lock PC
             </button>
             <button
               onClick={handleSleepPC}
-              className="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium transition-colors border border-slate-700 flex items-center gap-1"
+              className="px-3 py-2 rounded-lg bg-[#EFE9E3] hover:bg-[#F9F8F6] text-[#2D2825] text-xs font-bold transition-colors border border-[#D9CFC7] flex items-center gap-1.5 shadow-sm"
             >
-              🌙 Sleep
+              <Moon className="w-3.5 h-3.5 text-[#4A3E35]" /> Sleep
             </button>
             <button
               onClick={() => setPendingPowerAction("restart")}
-              className="px-3 py-2 rounded-lg bg-amber-950/50 hover:bg-amber-900/60 text-amber-300 text-xs font-medium transition-colors border border-amber-800/60 flex items-center gap-1"
+              className="px-3 py-2 rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-900 text-xs font-bold transition-colors border border-amber-300 flex items-center gap-1.5 shadow-sm"
             >
-              🔄 Reboot
+              <RefreshCcw className="w-3.5 h-3.5 text-amber-900" /> Reboot
             </button>
             <button
               onClick={() => setPendingPowerAction("shutdown")}
-              className="px-3 py-2 rounded-lg bg-red-950/50 hover:bg-red-900/60 text-red-300 text-xs font-medium transition-colors border border-red-800/60 flex items-center gap-1"
+              className="px-3 py-2 rounded-lg bg-rose-100 hover:bg-rose-200 text-rose-900 text-xs font-bold transition-colors border border-rose-300 flex items-center gap-1.5 shadow-sm"
             >
-              ⚡ Shutdown
+              <Power className="w-3.5 h-3.5 text-rose-900" /> Shutdown
             </button>
           </div>
-        </div>
+        </motion.div>
       </div>
 
       {/* Running Process Manager Drawer */}
-      {showProcesses && (
-        <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-4 space-y-3 animate-fade-in">
-          <div className="flex items-center justify-between">
-            <h4 className="text-xs font-semibold text-slate-300 uppercase tracking-wider flex items-center gap-2">
-              <span>Active System Processes</span>
-              {loadingProcs && <span className="text-cyan-400 text-xs animate-pulse">(refreshing...)</span>}
-            </h4>
-            <button
-              onClick={loadProcesses}
-              className="text-xs text-cyan-400 hover:underline"
-            >
-              Refresh List
-            </button>
-          </div>
-
-          <div className="max-h-60 overflow-y-auto space-y-1.5 pr-1">
-            {processes.map((proc) => (
-              <div
-                key={proc.pid}
-                className="flex items-center justify-between py-1.5 px-3 bg-slate-900/80 border border-slate-800/80 rounded-lg text-xs"
-              >
-                <div className="flex items-center space-x-3">
-                  <span className="font-mono text-slate-400 text-[11px] w-12">PID {proc.pid}</span>
-                  <span className="font-medium text-slate-200">{proc.name}</span>
-                </div>
-                <div className="flex items-center space-x-4">
-                  <span className="font-mono text-slate-400 text-[11px]">CPU: {proc.cpu_percent}%</span>
-                  <span className="font-mono text-slate-400 text-[11px]">RAM: {proc.memory_percent}%</span>
-                  <button
-                    onClick={() => handleKillProcess(String(proc.pid))}
-                    className="px-2 py-0.5 bg-red-950/60 hover:bg-red-900 text-red-300 rounded text-[11px] border border-red-800/50"
-                  >
-                    Kill
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Power Confirmation Modal */}
-      {pendingPowerAction && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 max-w-sm w-full space-y-4 shadow-2xl">
-            <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
-              ⚠️ Confirm System {pendingPowerAction === "shutdown" ? "Shutdown" : "Restart"}
-            </h3>
-            <p className="text-xs text-slate-300 leading-relaxed">
-              Are you sure you want to {pendingPowerAction} your computer? Any unsaved work in other applications may be lost.
-            </p>
-            <div className="flex items-center justify-end space-x-3 pt-2">
+      <AnimatePresence>
+        {showProcesses && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            className="bg-[#F9F8F6] border border-[#D9CFC7] rounded-xl p-4 space-y-3 overflow-hidden shadow-inner"
+          >
+            <div className="flex items-center justify-between">
+              <h4 className="text-xs font-bold text-[#2D2825] uppercase tracking-wider flex items-center gap-2">
+                <Activity className="w-3.5 h-3.5 text-[#4A3E35]" />
+                <span>Active System Processes</span>
+                {loadingProcs && <span className="text-[#C9B59C] text-xs animate-pulse font-bold">(refreshing...)</span>}
+              </h4>
               <button
-                onClick={() => setPendingPowerAction(null)}
-                className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium"
+                onClick={loadProcesses}
+                className="text-xs text-[#4A3E35] hover:underline flex items-center gap-1 font-bold"
               >
-                Cancel
-              </button>
-              <button
-                onClick={confirmPowerAction}
-                className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs font-bold shadow-lg shadow-red-600/30"
-              >
-                Confirm {pendingPowerAction === "shutdown" ? "Shutdown" : "Restart"}
+                <RotateCw className="w-3 h-3" /> Refresh List
               </button>
             </div>
+
+            <div className="max-h-60 overflow-y-auto space-y-1.5 pr-1">
+              {processes.map((proc) => (
+                <div
+                  key={proc.pid}
+                  className="flex items-center justify-between py-1.5 px-3 bg-[#EFE9E3] border border-[#D9CFC7] rounded-lg text-xs"
+                >
+                  <div className="flex items-center space-x-3">
+                    <span className="font-mono text-[#6C625A] text-[11px] w-14 font-semibold">PID {proc.pid}</span>
+                    <span className="font-bold text-[#2D2825]">{proc.name}</span>
+                  </div>
+                  <div className="flex items-center space-x-4">
+                    <span className="font-mono text-[#6C625A] text-[11px] font-medium">CPU: {proc.cpu_percent}%</span>
+                    <span className="font-mono text-[#6C625A] text-[11px] font-medium">RAM: {proc.memory_percent}%</span>
+                    <button
+                      onClick={() => handleKillProcess(String(proc.pid))}
+                      className="px-2 py-0.5 bg-rose-100 hover:bg-rose-200 text-rose-900 font-bold rounded text-[11px] border border-rose-300 flex items-center gap-1"
+                    >
+                      <XCircle className="w-3 h-3" /> Kill
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Power Confirmation Modal */}
+      <AnimatePresence>
+        {pendingPowerAction && (
+          <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-[#F9F8F6] border border-[#D9CFC7] rounded-2xl p-6 max-w-sm w-full space-y-4 shadow-2xl"
+            >
+              <h3 className="text-base font-bold text-[#2D2825] flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5 text-amber-700" />
+                <span>Confirm System {pendingPowerAction === "shutdown" ? "Shutdown" : "Restart"}</span>
+              </h3>
+              <p className="text-xs text-[#6C625A] leading-relaxed font-medium">
+                Are you sure you want to {pendingPowerAction} your computer? Any unsaved work in other applications may be lost.
+              </p>
+              <div className="flex items-center justify-end space-x-3 pt-2">
+                <button
+                  onClick={() => setPendingPowerAction(null)}
+                  className="px-4 py-2 rounded-lg bg-[#EFE9E3] hover:bg-[#D9CFC7] text-[#2D2825] text-xs font-bold transition border border-[#D9CFC7]"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmPowerAction}
+                  className="px-4 py-2 rounded-lg bg-rose-700 hover:bg-rose-800 text-white text-xs font-bold shadow-md transition"
+                >
+                  Confirm {pendingPowerAction === "shutdown" ? "Shutdown" : "Restart"}
+                </button>
+              </div>
+            </motion.div>
           </div>
-        </div>
-      )}
+        )}
+      </AnimatePresence>
     </div>
   );
 };

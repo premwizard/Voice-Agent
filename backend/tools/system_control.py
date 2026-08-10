@@ -18,13 +18,19 @@ def get_platform() -> str:
     """Returns system platform identifier ('windows', 'darwin', 'linux')."""
     return platform.system().lower()
 
+# Module-level cached state for reliable fallbacks
+_LAST_KNOWN_VOLUME: int = 50
+_LAST_KNOWN_BRIGHTNESS: int = 75
+
 # ------------------------------------------------------------------------------
 # 1. Master Audio Volume Controls
 # ------------------------------------------------------------------------------
 
 def set_master_volume(level_percent: int) -> Dict[str, Any]:
     """Sets system master volume (0 to 100) and returns real-time synced level."""
+    global _LAST_KNOWN_VOLUME
     level = max(0, min(100, int(level_percent)))
+    _LAST_KNOWN_VOLUME = level
     sys_os = get_platform()
     
     try:
@@ -40,11 +46,10 @@ def set_master_volume(level_percent: int) -> Dict[str, Any]:
                 volume = interface.QueryInterface(IAudioEndpointVolume)
                 volume.SetMasterVolumeLevelScalar(level / 100.0, None)
                 
-                # Query actual synced hardware scalar back from OS
                 actual = round(volume.GetMasterVolumeLevelScalar() * 100)
+                _LAST_KNOWN_VOLUME = actual
                 return {"success": True, "message": f"Master volume set to {actual}%", "level": actual, "volume_percent": actual}
             except Exception:
-                # WScript SendKeys fallback if PyCaw fails
                 subprocess.run(["powershell", "-Command", "(New-Object -ComObject WScript.Shell).SendKeys([char]175)"], capture_output=True)
                 return {"success": True, "message": f"Master volume adjusted to {level}%", "level": level, "volume_percent": level}
         elif sys_os == "darwin":
@@ -58,6 +63,7 @@ def set_master_volume(level_percent: int) -> Dict[str, Any]:
 
 def get_master_volume() -> Dict[str, Any]:
     """Retrieves real-time current master audio volume percentage state."""
+    global _LAST_KNOWN_VOLUME
     sys_os = get_platform()
     try:
         if sys_os == "windows":
@@ -71,14 +77,17 @@ def get_master_volume() -> Dict[str, Any]:
                 interface = device.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
                 volume = interface.QueryInterface(IAudioEndpointVolume)
                 current = round(volume.GetMasterVolumeLevelScalar() * 100)
+                _LAST_KNOWN_VOLUME = current
                 return {"success": True, "volume_percent": current, "level": current, "message": f"Master volume is currently {current}%."}
             except Exception:
-                return {"success": True, "volume_percent": 50, "level": 50, "message": "Master volume is currently 50%."}
+                return {"success": True, "volume_percent": _LAST_KNOWN_VOLUME, "level": _LAST_KNOWN_VOLUME, "message": f"Master volume is currently {_LAST_KNOWN_VOLUME}%."}
         elif sys_os == "darwin":
             res = subprocess.check_output(["osascript", "-e", "output volume of (get volume settings)"]).decode().strip()
-            return {"success": True, "volume_percent": int(res), "level": int(res), "message": f"Master volume is currently {res}%."}
+            val = int(res)
+            _LAST_KNOWN_VOLUME = val
+            return {"success": True, "volume_percent": val, "level": val, "message": f"Master volume is currently {val}%."}
         else:
-            return {"success": True, "volume_percent": 50, "level": 50, "message": "Master volume is currently 50%."}
+            return {"success": True, "volume_percent": _LAST_KNOWN_VOLUME, "level": _LAST_KNOWN_VOLUME, "message": f"Master volume is currently {_LAST_KNOWN_VOLUME}%."}
     except Exception as e:
         return {"success": False, "error": f"Failed to get volume: {str(e)}", "message": f"Could not read volume state: {str(e)}"}
 
@@ -88,7 +97,9 @@ def get_master_volume() -> Dict[str, Any]:
 
 def set_screen_brightness(level_percent: int) -> Dict[str, Any]:
     """Sets screen brightness level (0 to 100)."""
+    global _LAST_KNOWN_BRIGHTNESS
     level = max(0, min(100, int(level_percent)))
+    _LAST_KNOWN_BRIGHTNESS = level
     sys_os = get_platform()
     
     try:
@@ -106,6 +117,7 @@ def set_screen_brightness(level_percent: int) -> Dict[str, Any]:
 
 def get_screen_brightness() -> Dict[str, Any]:
     """Retrieves real-time current screen brightness percentage state."""
+    global _LAST_KNOWN_BRIGHTNESS
     sys_os = get_platform()
     try:
         if sys_os == "windows":
@@ -113,10 +125,12 @@ def get_screen_brightness() -> Dict[str, Any]:
             res = subprocess.check_output(["powershell", "-Command", ps_cmd], capture_output=True, text=True).strip()
             if res.isdigit():
                 val = int(res)
+                _LAST_KNOWN_BRIGHTNESS = val
                 return {"success": True, "brightness_percent": val, "brightness": val, "message": f"Screen brightness is currently {val}%."}
-        return {"success": True, "brightness_percent": 75, "brightness": 75, "message": "Screen brightness is currently 75%."}
+        return {"success": True, "brightness_percent": _LAST_KNOWN_BRIGHTNESS, "brightness": _LAST_KNOWN_BRIGHTNESS, "message": f"Screen brightness is currently {_LAST_KNOWN_BRIGHTNESS}%."}
     except Exception:
-        return {"success": True, "brightness_percent": 75, "brightness": 75, "message": "Screen brightness is currently 75%."}
+        return {"success": True, "brightness_percent": _LAST_KNOWN_BRIGHTNESS, "brightness": _LAST_KNOWN_BRIGHTNESS, "message": f"Screen brightness is currently {_LAST_KNOWN_BRIGHTNESS}%."}
+
 
 # ------------------------------------------------------------------------------
 # 3. Process Management

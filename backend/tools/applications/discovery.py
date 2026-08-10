@@ -158,13 +158,28 @@ class ApplicationDiscoveryService:
         known_locations = [
             (
                 "Antigravity IDE",
+                os.path.join(user_profile, r"AppData\Local\Programs\Antigravity IDE\bin\antigravity-ide.cmd"),
+                ["antigravity", "antigravity ide", "antigravity-ide", "gemini ide", "antigravity ide.cmd"]
+            ),
+            (
+                "Antigravity IDE",
                 os.path.join(user_profile, r"AppData\Local\Programs\Antigravity IDE\Antigravity IDE.exe"),
+                ["antigravity", "antigravity ide", "antigravity-ide", "gemini ide"]
+            ),
+            (
+                "Antigravity IDE",
+                os.path.join(user_profile, r"AppData\Local\Programs\Antigravity IDE\Antigravity.exe"),
                 ["antigravity", "antigravity ide", "antigravity-ide", "gemini ide"]
             ),
             (
                 "Visual Studio Code",
                 os.path.join(user_profile, r"AppData\Local\Programs\Microsoft VS Code\Code.exe"),
                 ["vscode", "vs code", "code", "visual studio code", "code editor"]
+            ),
+            (
+                "Visual Studio Code CLI",
+                os.path.join(user_profile, r"AppData\Local\Programs\Microsoft VS Code\bin\code.cmd"),
+                ["vscode", "vs code", "code", "visual studio code"]
             ),
             (
                 "Google Chrome",

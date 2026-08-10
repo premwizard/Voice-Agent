@@ -8,6 +8,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { motion } from "framer-motion";
 
 interface CanvasAudioOrbProps {
   isActive: boolean;
@@ -49,19 +50,23 @@ export default function CanvasAudioOrb({ isActive, mode, size = 180, audioLevel 
       const levelBoost = audioLevel ? audioLevel * 30 : Math.sin(tick * 3) * 6;
       const baseRadius = isActive ? 50 + levelBoost : 42 + Math.sin(tick) * 2;
 
-      // Select colors based on current voice mode
-      let primaryColor = "99, 102, 241"; // Indigo
-      let secondaryColor = "168, 85, 247"; // Purple
-      let glowColor = "129, 140, 248";
+      // Warm Luxury Palette Tokens:
+      // #F9F8F6 (249, 248, 246)
+      // #EFE9E3 (239, 233, 227)
+      // #D9CFC7 (217, 207, 199)
+      // #C9B59C (201, 181, 156)
+      let primaryColor = "201, 181, 156"; // #C9B59C Gold
+      let secondaryColor = "217, 207, 199"; // #D9CFC7 Taupe
+      let glowColor = "180, 155, 125"; // Warm Deep Oak
 
       if (mode === "user") {
-        primaryColor = "244, 63, 94"; // Rose
-        secondaryColor = "249, 115, 22"; // Orange
-        glowColor = "251, 113, 133";
+        primaryColor = "217, 120, 100"; // Muted Rose Gold
+        secondaryColor = "201, 181, 156";
+        glowColor = "230, 150, 130";
       } else if (mode === "ai") {
-        primaryColor = "59, 130, 246"; // Blue
-        secondaryColor = "168, 85, 247"; // Purple
-        glowColor = "56, 189, 248";
+        primaryColor = "180, 155, 125"; // Rich Oak
+        secondaryColor = "217, 207, 199";
+        glowColor = "201, 181, 156";
       }
 
       // Outer Ripple Waves when active
@@ -72,7 +77,7 @@ export default function CanvasAudioOrb({ isActive, mode, size = 180, audioLevel 
 
           ctx.beginPath();
           ctx.arc(centerX, centerY, ringRadius, 0, Math.PI * 2);
-          ctx.strokeStyle = `rgba(${primaryColor}, ${ringAlpha * 0.4})`;
+          ctx.strokeStyle = `rgba(${primaryColor}, ${ringAlpha * 0.45})`;
           ctx.lineWidth = 1.5;
           ctx.stroke();
         }
@@ -83,9 +88,9 @@ export default function CanvasAudioOrb({ isActive, mode, size = 180, audioLevel 
         centerX, centerY, baseRadius * 0.2,
         centerX, centerY, baseRadius * 2
       );
-      glowGradient.addColorStop(0, `rgba(${glowColor}, ${isActive ? 0.45 + (audioLevel * 0.3) : 0.15})`);
-      glowGradient.addColorStop(0.5, `rgba(${primaryColor}, ${isActive ? 0.25 + (audioLevel * 0.2) : 0.08})`);
-      glowGradient.addColorStop(1, "rgba(0, 0, 0, 0)");
+      glowGradient.addColorStop(0, `rgba(${glowColor}, ${isActive ? 0.5 + (audioLevel * 0.3) : 0.2})`);
+      glowGradient.addColorStop(0.5, `rgba(${primaryColor}, ${isActive ? 0.3 + (audioLevel * 0.2) : 0.1})`);
+      glowGradient.addColorStop(1, "rgba(249, 248, 246, 0)");
 
       ctx.beginPath();
       ctx.arc(centerX, centerY, baseRadius * 2, 0, Math.PI * 2);
@@ -118,15 +123,15 @@ export default function CanvasAudioOrb({ isActive, mode, size = 180, audioLevel 
         centerY,
         baseRadius * 1.2
       );
-      coreGradient.addColorStop(0, `rgba(${glowColor}, 0.9)`);
-      coreGradient.addColorStop(0.5, `rgba(${primaryColor}, 0.8)`);
-      coreGradient.addColorStop(1, `rgba(${secondaryColor}, 0.6)`);
+      coreGradient.addColorStop(0, `rgba(249, 248, 246, 0.95)`);
+      coreGradient.addColorStop(0.5, `rgba(${primaryColor}, 0.9)`);
+      coreGradient.addColorStop(1, `rgba(${secondaryColor}, 0.8)`);
 
       ctx.fillStyle = coreGradient;
       ctx.shadowColor = `rgba(${primaryColor}, 0.8)`;
       ctx.shadowBlur = isActive ? 25 + (audioLevel * 20) : 12;
       ctx.fill();
-      ctx.shadowBlur = 0; // reset
+      ctx.shadowBlur = 0;
 
       // Orbiting Spark Particles
       particles.forEach((p) => {
@@ -137,7 +142,7 @@ export default function CanvasAudioOrb({ isActive, mode, size = 180, audioLevel 
 
         ctx.beginPath();
         ctx.arc(px, py, p.radius, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(${glowColor}, ${p.alpha * (isActive ? 0.9 : 0.5)})`;
+        ctx.fillStyle = `rgba(${glowColor}, ${p.alpha * (isActive ? 0.9 : 0.6)})`;
         ctx.fill();
       });
 
@@ -153,12 +158,32 @@ export default function CanvasAudioOrb({ isActive, mode, size = 180, audioLevel 
 
   return (
     <div className="relative flex items-center justify-center">
+      {/* Outer Glowing Aura Ring */}
+      <motion.div
+        animate={{
+          scale: isActive ? [1, 1.12, 1] : [1, 1.04, 1],
+          opacity: isActive ? [0.4, 0.8, 0.4] : [0.2, 0.4, 0.2],
+        }}
+        transition={{
+          duration: isActive ? 1.8 : 3,
+          repeat: Infinity,
+          ease: "easeInOut",
+        }}
+        className="absolute rounded-full pointer-events-none blur-xl bg-[#C9B59C]/40"
+        style={{
+          width: size * 1.3,
+          height: size * 1.3,
+        }}
+      />
+
       <canvas
         ref={canvasRef}
         width={size * 1.6}
         height={size * 1.6}
-        className="pointer-events-none drop-shadow-2xl"
+        className="pointer-events-none drop-shadow-lg z-10"
       />
     </div>
   );
 }
+
+
