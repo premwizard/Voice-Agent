@@ -1,0 +1,40 @@
+# ==============================================================================
+# FILE: .antigravityignore
+# WHAT THIS FILE IS: Ignore specification for Antigravity AI agent analysis.
+# WHY IT IS USED: Excludes build artifacts, dependency directories, system databases,
+#                 cache folders, and binary artifacts from workspace indexing.
+# ==============================================================================
+
+# Dependencies & Package Managers
+**/node_modules/
+**/venv/
+**/.venv/
+**/__pycache__/
+*.pyc
+
+# Build Outputs & Framework Caches
+frontend/.next/
+frontend/out/
+frontend/build/
+frontend/dist/
+backend/.ruff_cache/
+backend/.pytest_cache/
+**/*.tsbuildinfo
+
+# Local Databases & Persistent State
+backend/memory/*.db
+backend/memory/*.sqlite
+backend/memory/*.sqlite3
+
+# Environment & Secret Files
+**/.env
+**/.env.local
+**/.env.development.local
+**/.env.test.local
+**/.env.production.local
+
+# IDE & OS Artifacts
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
