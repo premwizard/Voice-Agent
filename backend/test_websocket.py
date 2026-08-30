@@ -7,9 +7,11 @@
 
 # Import asyncio for managing asynchronous event loops
 import asyncio
+import pytest
 # Import websockets library to create a client WebSocket connection
 import websockets
 
+@pytest.mark.asyncio
 async def test_ai_websocket():
     # WebSocket URL pointing to our local FastAPI WebSocket endpoint
     uri = "ws://localhost:8000/api/v1/ws/stream"
