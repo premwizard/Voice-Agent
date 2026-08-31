@@ -12,6 +12,7 @@ import pytest
 import websockets
 
 @pytest.mark.asyncio
+@pytest.mark.skip(reason="Manual integration test requiring a running backend server on ws://localhost:8000")
 async def test_ai_websocket():
     # WebSocket URL pointing to our local FastAPI WebSocket endpoint
     uri = "ws://localhost:8000/api/v1/ws/stream"

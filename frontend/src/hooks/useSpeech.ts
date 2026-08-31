@@ -45,6 +45,7 @@ export function useSpeech(onSpeechEnd?: (finalText: string, requestId: string) =
   const spokenIndexRef = useRef<number>(0);
   const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const restartTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const startListeningRef = useRef<() => void>(() => {});
   
   const isSpeakingRef = useRef<boolean>(false);
   const isHandsFreeRef = useRef<boolean>(true);
@@ -270,7 +271,7 @@ export function useSpeech(onSpeechEnd?: (finalText: string, requestId: string) =
         if (isHandsFreeRef.current && !isSpeakingRef.current) {
           if (restartTimerRef.current) clearTimeout(restartTimerRef.current);
           restartTimerRef.current = setTimeout(() => {
-            startListening();
+            startListeningRef.current();
           }, 500);
         } else if (!isSpeakingRef.current) {
           setVoiceState("IDLE");
@@ -283,7 +284,7 @@ export function useSpeech(onSpeechEnd?: (finalText: string, requestId: string) =
           setSpeechStatus("Listening...");
           if (isHandsFreeRef.current && !isSpeakingRef.current) {
             if (restartTimerRef.current) clearTimeout(restartTimerRef.current);
-            restartTimerRef.current = setTimeout(() => startListening(), 700);
+            restartTimerRef.current = setTimeout(() => startListeningRef.current(), 700);
           }
         } else {
           setSpeechStatus(`Speech error: ${event.error}`);
@@ -299,6 +300,10 @@ export function useSpeech(onSpeechEnd?: (finalText: string, requestId: string) =
       setSpeechStatus("Failed to start speech recognition");
     }
   }, [autoSubmitTranscript, stopListening, cleanupAudioAnalyser, interruptTTS]);
+
+  useEffect(() => {
+    startListeningRef.current = startListening;
+  }, [startListening]);
 
   useEffect(() => {
     return () => {
@@ -335,7 +340,7 @@ export function useSpeech(onSpeechEnd?: (finalText: string, requestId: string) =
 
         if (isHandsFreeRef.current) {
           setTimeout(() => {
-            startListening();
+            startListeningRef.current();
           }, 350);
         }
       }
@@ -346,7 +351,7 @@ export function useSpeech(onSpeechEnd?: (finalText: string, requestId: string) =
       isSpeakingRef.current = false;
       setAudioLevel(0);
       if (isHandsFreeRef.current) {
-        setTimeout(() => startListening(), 350);
+        setTimeout(() => startListeningRef.current(), 350);
       }
     };
 

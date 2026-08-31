@@ -35,6 +35,7 @@ export function useWebSocket() {
   
   // Pending message queue for instant send on connection open
   const pendingPayloadsRef = useRef<string[]>([]);
+  const connectRef = useRef<() => void>(() => {});
 
   // Function to establish WebSocket connection
   const connect = useCallback(() => {
@@ -115,7 +116,7 @@ export function useWebSocket() {
         if (!reconnectTimerRef.current) {
           reconnectTimerRef.current = setTimeout(() => {
             if (isMountedRef.current) {
-              connect();
+              connectRef.current();
             }
           }, 1500);
         }
@@ -131,6 +132,10 @@ export function useWebSocket() {
       console.warn("Failed to instantiate WebSocket:", err);
     }
   }, []);
+
+  useEffect(() => {
+    connectRef.current = connect;
+  }, [connect]);
 
   const disconnect = useCallback(() => {
     if (reconnectTimerRef.current) {

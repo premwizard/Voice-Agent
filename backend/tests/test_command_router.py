@@ -6,10 +6,18 @@
 # ==============================================================================
 
 import unittest
+from unittest.mock import patch
 from core.command_router import command_router, RouteTarget
 
 class TestCommandRouter(unittest.TestCase):
-    def test_fast_path_volume(self):
+    @patch("tools.tool_registry.tool_registry.execute")
+    def test_fast_path_volume(self, mock_execute):
+        mock_execute.return_value = {
+            "success": True,
+            "message": "Master volume set to 50%",
+            "level": 50,
+            "volume_percent": 50
+        }
         res = command_router.classify_and_route("set my volume to 50%")
         self.assertEqual(res["route"], RouteTarget.FAST_PATH.value)
         self.assertEqual(res["confidence"], "HIGH")
